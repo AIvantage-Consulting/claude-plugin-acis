@@ -1,0 +1,241 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIS Project Configuration",
+  "description": "Project-specific configuration for ACIS (Automated Code Improvement System)",
+  "type": "object",
+  "required": ["projectName"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "projectName": {
+      "type": "string",
+      "description": "Human-readable name of the project"
+    },
+    "vision": {
+      "type": "object",
+      "description": "Project vision captured from /acis init interview or doc extraction",
+      "properties": {
+        "problem": {
+          "type": "string",
+          "description": "Problem statement - what problem is being solved"
+        },
+        "solution": {
+          "type": "string",
+          "description": "Solution overview - how the system solves the problem"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope boundaries - what's explicitly in/out of scope"
+        },
+        "successMetrics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "How success will be measured"
+        }
+      }
+    },
+    "personas": {
+      "type": "array",
+      "description": "Target users of the system",
+      "items": {
+        "type": "object",
+        "required": ["name", "role", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Persona name (e.g., 'Brenda')"
+          },
+          "role": {
+            "type": "string",
+            "description": "Role description (e.g., 'elderly patient')"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["primary", "secondary"],
+            "description": "Primary (daily users) or secondary (occasional users)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed persona description"
+          },
+          "keyNeed": {
+            "type": "string",
+            "description": "Primary need this persona has"
+          },
+          "frustration": {
+            "type": "string",
+            "description": "Current frustration with existing solutions"
+          },
+          "antiPersona": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, this is someone we're explicitly NOT designing for"
+          }
+        }
+      }
+    },
+    "compliance": {
+      "type": "array",
+      "description": "Regulatory/compliance requirements",
+      "items": {
+        "type": "string",
+        "enum": ["HIPAA", "GDPR", "SOC2", "PCI-DSS", "CCPA", "FedRAMP", "ISO27001", "none"]
+      }
+    },
+    "architectureModel": {
+      "type": "string",
+      "description": "Architecture pattern used in the project",
+      "enum": ["three-layer", "hexagonal", "microservices", "monolith", "serverless", "jamstack", "custom"],
+      "default": "custom"
+    },
+    "platform": {
+      "type": "object",
+      "description": "Target platform capabilities",
+      "properties": {
+        "web": { "type": "boolean", "default": true },
+        "mobile": { "type": "boolean", "default": false },
+        "ios": { "type": "boolean", "default": false },
+        "android": { "type": "boolean", "default": false },
+        "desktop": { "type": "boolean", "default": false },
+        "offline": { "type": "boolean", "default": false },
+        "voice": { "type": "boolean", "default": false }
+      }
+    },
+    "integrations": {
+      "type": "array",
+      "description": "External systems to integrate with",
+      "items": { "type": "string" }
+    },
+    "techStack": {
+      "type": "object",
+      "description": "Technology stack information",
+      "properties": {
+        "language": { "type": "string" },
+        "framework": { "type": "string" },
+        "runtime": { "type": "string" },
+        "database": { "type": "string" },
+        "testFramework": { "type": "string" },
+        "packageManager": { "type": "string" }
+      }
+    },
+    "customMetrics": {
+      "type": "array",
+      "description": "Project-specific metrics for goal verification",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "command"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Metric identifier (snake_case)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable metric name"
+          },
+          "command": {
+            "type": "string",
+            "description": "Bash 3.2 compatible detection command"
+          },
+          "expected_value": {
+            "description": "Expected value for this metric"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": ["eq", "lt", "lte", "gt", "gte", "contains", "regex"],
+            "default": "eq"
+          }
+        }
+      }
+    },
+    "goalsDirectory": {
+      "type": "string",
+      "description": "Directory for goal JSON files",
+      "default": "docs/reviews/goals"
+    },
+    "auditsDirectory": {
+      "type": "string",
+      "description": "Directory for Process Auditor reports",
+      "default": "docs/audits"
+    },
+    "skillsDirectory": {
+      "type": "string",
+      "description": "Directory for dynamically generated skills",
+      "default": "skills"
+    },
+    "auditThreshold": {
+      "type": "integer",
+      "description": "Number of achieved goals before auto-triggering Process Auditor",
+      "default": 3,
+      "minimum": 1
+    },
+    "generatedFrom": {
+      "type": "string",
+      "enum": ["interview", "docs", "manual"],
+      "description": "How this config was created"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this config was generated"
+    },
+    "lastAudit": {
+      "type": "object",
+      "description": "State from last Process Auditor run",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "goalsAnalyzed": { "type": "integer" },
+        "skillsGenerated": { "type": "integer" }
+      }
+    },
+    "goalsSinceAudit": {
+      "type": "integer",
+      "description": "Goals achieved since last audit",
+      "default": 0
+    },
+    "pluginDefaults": {
+      "type": "object",
+      "description": "Default flags based on available plugins",
+      "properties": {
+        "skipCodex": {
+          "type": "boolean",
+          "description": "Always use --skip-codex (Codex MCP not available)",
+          "default": false
+        },
+        "skipRalphLoop": {
+          "type": "boolean",
+          "description": "Skip ralph-loop (ralph-wiggum plugin not available)",
+          "default": false
+        },
+        "useInternalAgentsOnly": {
+          "type": "boolean",
+          "description": "Use only internal Claude agents for all operations",
+          "default": false
+        }
+      }
+    },
+    "installedPlugins": {
+      "type": "object",
+      "description": "Record of plugin availability at init time",
+      "properties": {
+        "ralphWiggum": {
+          "type": "object",
+          "properties": {
+            "installed": { "type": "boolean" },
+            "checkedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "codexMcp": {
+          "type": "object",
+          "properties": {
+            "installed": { "type": "boolean" },
+            "checkedAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

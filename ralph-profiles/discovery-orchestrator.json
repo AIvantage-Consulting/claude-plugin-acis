@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "profile": "discovery-orchestrator",
+  "description": "Loop 2 (Middle): Structured analysis and goal extraction using parallel fresh agents",
+  "purpose": "Multi-perspective discovery, decision surfacing, goal extraction, and verification scaffolding with fresh context per agent",
+
+  "trigger": {
+    "type": "command",
+    "commands": [
+      "/acis discovery",
+      "/acis extract"
+    ]
+  },
+
+  "context_management": {
+    "pattern": "fresh-agent-per-task",
+    "orchestrator_budget": "15%",
+    "parallel_execution": "All independent agents spawn in SINGLE message for concurrent execution",
+    "state_files": {
+      "global_state": ".acis/STATE.md",
+      "discovery": ".acis/discovery/{goal-id}.md"
+    }
+  },
+
+  "phases": [
+    {
+      "name": "DISCOVER",
+      "order": 1,
+      "description": "Spawn parallel fresh agents for multi-perspective analysis",
+      "execution": {
+        "wave_1": {
+          "description": "All internal agents + Codex in SINGLE message (parallel)",
+          "spawn_pattern": "Multiple Task + mcp__codex__codex calls in one message"
+        },
+        "wave_2": {
+          "description": "CEO validation after Wave 1 completes (parallel)",
+          "spawn_pattern": "Two mcp__codex__codex calls in one message"
+        }
+      },
+      "internal_agents": [
+        {
+          "type": "security-privacy",
+          "context_budget": "50%",
+          "focus": "PHI protection, HIPAA compliance"
+        },
+        {
+          "type": "tech-lead",
+          "context_budget": "50%",
+          "focus": "Architecture patterns, design quality"
+        },
+        {
+          "type": "test-lead",
+          "context_budget": "50%",
+          "focus": "Coverage gaps, test strategies"
+        },
+        {
+          "type": "mobile-lead",
+          "context_budget": "50%",
+          "focus": "Platform compatibility, offline support"
+        },
+        {
+          "type": "oracle",
+          "context_budget": "50%",
+          "focus": "End-user lens, persona impact"
+        },
+        {
+          "type": "devops-lead",
+          "context_budget": "50%",
+          "focus": "Operations, deployment, monitoring"
+        },
+        {
+          "type": "oracle",
+          "context_budget": "50%",
+          "focus": "Crash-resilience, failure modes"
+        }
+      ],
+      "codex_agents": [
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-architect-discovery.md",
+          "perspective": "architecture",
+          "sandbox": "read-only"
+        },
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-ux-discovery.md",
+          "perspective": "ux",
+          "sandbox": "read-only"
+        },
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-security-discovery.md",
+          "perspective": "security",
+          "sandbox": "read-only"
+        },
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-algorithm-discovery.md",
+          "perspective": "algorithm",
+          "sandbox": "read-only"
+        }
+      ],
+      "ceo_agents": [
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-ceo-alpha.md",
+          "perspective": "AI-Native CEO",
+          "sandbox": "read-only"
+        },
+        {
+          "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-ceo-beta.md",
+          "perspective": "Modern SWE CEO",
+          "sandbox": "read-only"
+        }
+      ],
+      "actions": [
+        "ORCHESTRATOR: Read goal/topic scope",
+        "ORCHESTRATOR: Spawn ALL Wave 1 agents in SINGLE message (parallel execution)",
+        "  - 7 internal agents via Task tool",
+        "  - 4 Codex agents via mcp__codex__codex",
+        "  - 1 WebSearch for best practices",
+        "ORCHESTRATOR: Block until all Wave 1 complete",
+        "ORCHESTRATOR: Synthesize Wave 1 findings",
+        "ORCHESTRATOR: Spawn Wave 2 CEOs in SINGLE message (parallel)",
+        "ORCHESTRATOR: Block until CEOs complete",
+        "ORCHESTRATOR: Write discovery to .acis/discovery/{goal-id}.md"
+      ],
+      "outputs": ["discoveryFindings", "ceoConvergence"],
+      "timeout_minutes": 30
+    },
+    {
+      "name": "DECIDE",
+      "order": 2,
+      "description": "Surface and validate decisions",
+      "actions": [
+        "Identify WIRED-IN decisions (already in code)",
+        "Identify INHERITED decisions (from existing patterns)",
+        "Identify PENDING decisions (need resolution)",
+        "For PENDING: Run dual-CEO validation",
+        "Document decisions in decision manifest"
+      ],
+      "decision_types": [
+        {
+          "type": "wired-in",
+          "action": "document",
+          "requires_validation": false
+        },
+        {
+          "type": "inherited",
+          "action": "document",
+          "requires_validation": false
+        },
+        {
+          "type": "pending",
+          "action": "resolve",
+          "requires_validation": true,
+          "validators": ["codex-ceo-alpha", "codex-ceo-beta"]
+        }
+      ],
+      "outputs": ["decisionManifest"],
+      "timeout_minutes": 15
+    },
+    {
+      "name": "EXTRACT-GOALS",
+      "order": 3,
+      "description": "Create structured goal files from findings",
+      "actions": [
+        "For each finding, create goal JSON per ${CLAUDE_PLUGIN_ROOT}/schemas/acis-goal.schema.json",
+        "Assign severity (critical, high, medium, low)",
+        "Define detection command (must be Bash 3.2 compatible)",
+        "Define target value",
+        "Write to ${config.goalsDirectory}/PR<N>-G<X>-<name>.json"
+      ],
+      "outputs": ["goalFiles"],
+      "timeout_minutes": 10
+    },
+    {
+      "name": "SCAFFOLD-TESTS",
+      "order": 4,
+      "description": "Create verification test scaffolds",
+      "actions": [
+        "For each goal, create test scaffold if applicable",
+        "Tests follow RED state (should fail initially)",
+        "Use PHI-safe test builders if compliance includes HIPAA",
+        "Link tests to goals in goal files"
+      ],
+      "outputs": ["testScaffolds"],
+      "optional": true,
+      "timeout_minutes": 10
+    },
+    {
+      "name": "VERIFY-TOOLING",
+      "order": 5,
+      "description": "Validate detection commands before handoff",
+      "actions": [
+        "For each goal, run detection command",
+        "Verify command executes without error",
+        "Verify output is parseable",
+        "Flag any commands that fail validation",
+        "Report tooling status"
+      ],
+      "outputs": ["toolingValidation"],
+      "timeout_minutes": 5
+    }
+  ],
+
+  "completion_criteria": {
+    "all_required": [
+      "discovery_findings_generated",
+      "goals_extracted",
+      "detection_commands_validated"
+    ],
+    "any_optional": [
+      "test_scaffolds_created",
+      "decisions_resolved"
+    ]
+  },
+
+  "escalation": {
+    "on_codex_unavailable": "use_local_agents_only",
+    "on_validation_failure": "flag_and_continue",
+    "max_retries": 3
+  },
+
+  "integration": {
+    "triggered_by_loop_1": false,
+    "triggers_loop_3": true,
+    "reports_to_loop_1": ["patterns", "friction_points", "effectiveness_metrics"]
+  },
+
+  "discovery_config": {
+    "default_depth": "standard",
+    "depths": {
+      "shallow": { "agents": 2, "codex": false },
+      "standard": { "agents": 4, "codex": true },
+      "deep": { "agents": 4, "codex": true, "follow_up": true }
+    }
+  }
+}

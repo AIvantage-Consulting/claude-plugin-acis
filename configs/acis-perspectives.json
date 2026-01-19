@@ -1,0 +1,330 @@
+{
+  "$schema": "../schemas/acis-perspectives.schema.json",
+  "version": "2.0",
+  "description": "Multi-perspective agent configurations for ACIS v2",
+
+  "discovery_perspectives": {
+    "description": "Phase 1: Parallel discovery agents analyze goal from multiple angles",
+
+    "internal_agents": [
+      {
+        "agent_id": "security-privacy",
+        "perspective": "PHI Protection & HIPAA Compliance",
+        "subagent_type": "security-privacy",
+        "focus_areas": [
+          "PHI boundary violations",
+          "Encryption at rest/transit",
+          "HIPAA §164.312 compliance",
+          "Access control gaps",
+          "Audit trail completeness"
+        ],
+        "prompt_template": "Analyze this goal for security and privacy implications. Focus on PHI protection, HIPAA compliance, and attack surface."
+      },
+      {
+        "agent_id": "tech-lead",
+        "perspective": "Architecture & Design Patterns",
+        "subagent_type": "tech-lead",
+        "focus_areas": [
+          "Three-layer architecture adherence",
+          "SOLID principles",
+          "Dependency injection patterns",
+          "Coupling and cohesion",
+          "Technical debt implications"
+        ],
+        "prompt_template": "Analyze this goal for architectural implications. Identify pattern violations, refactoring opportunities, and design improvements."
+      },
+      {
+        "agent_id": "test-lead",
+        "perspective": "Test Coverage & Quality",
+        "subagent_type": "test-lead",
+        "focus_areas": [
+          "Test coverage gaps",
+          "Edge case handling",
+          "Regression risk",
+          "Test pyramid balance",
+          "PHI-safe test data"
+        ],
+        "prompt_template": "Analyze this goal for testing implications. Identify coverage gaps, required test scenarios, and verification strategies."
+      },
+      {
+        "agent_id": "mobile-lead",
+        "perspective": "Cross-Platform Compatibility",
+        "subagent_type": "mobile-lead",
+        "focus_areas": [
+          "iOS/Android parity",
+          "Platform-specific APIs",
+          "Offline functionality",
+          "Performance on devices",
+          "Native module compatibility"
+        ],
+        "prompt_template": "Analyze this goal for mobile platform implications. Check iOS/Android compatibility, offline support, and native integration."
+      },
+      {
+        "agent_id": "oracle-enduser",
+        "perspective": "End-User Experience Lens",
+        "subagent_type": "oracle",
+        "focus_areas": [
+          "User journey impact",
+          "Persona-specific concerns (Brenda, David, Dr. Evans)",
+          "Accessibility barriers",
+          "Cognitive load",
+          "Error recovery UX"
+        ],
+        "prompt_template": "Analyze this goal from end-user perspective. Consider Brenda (elderly patient), David (caregiver), Dr. Evans (provider). What UX concerns exist?"
+      },
+      {
+        "agent_id": "operations-maintenance",
+        "perspective": "Operations & Maintainability",
+        "subagent_type": "devops-lead",
+        "focus_areas": [
+          "Deployment complexity",
+          "Monitoring and alerting",
+          "Log verbosity and usefulness",
+          "Configuration management",
+          "Rollback strategies"
+        ],
+        "prompt_template": "Analyze this goal for operational implications. Consider deployment, monitoring, logging, and maintenance burden."
+      },
+      {
+        "agent_id": "crash-resilience",
+        "perspective": "Crash Resilience & Error Handling",
+        "subagent_type": "oracle",
+        "focus_areas": [
+          "Crash recovery paths",
+          "Silent failure detection",
+          "Graceful degradation",
+          "Error propagation chains",
+          "State corruption risks"
+        ],
+        "prompt_template": "Analyze this goal for crash resilience. Identify failure modes, silent failures, error handling gaps, and recovery mechanisms."
+      },
+      {
+        "agent_id": "performance-analyst",
+        "perspective": "Performance & Scalability",
+        "subagent_type": "oracle",
+        "focus_areas": [
+          "Memory usage patterns",
+          "CPU hotspots",
+          "Network efficiency",
+          "Battery impact (mobile)",
+          "Scalability bottlenecks"
+        ],
+        "prompt_template": "Analyze this goal for performance implications. Check memory, CPU, network efficiency, and scalability concerns."
+      },
+      {
+        "agent_id": "refactor-opportunity",
+        "perspective": "Refactoring Opportunities",
+        "subagent_type": "oracle",
+        "focus_areas": [
+          "Code duplication",
+          "Abstraction opportunities",
+          "Interface simplification",
+          "Dead code elimination",
+          "Naming improvements"
+        ],
+        "prompt_template": "Analyze this goal for refactoring opportunities. Identify duplications, abstraction chances, and code quality improvements beyond the immediate fix."
+      }
+    ],
+
+    "codex_delegations": [
+      {
+        "agent_id": "codex-architect",
+        "perspective": "System Architecture & Tradeoffs",
+        "codex_expert": "Architect",
+        "mode": "Advisory",
+        "focus_areas": [
+          "System-level design",
+          "Tradeoff analysis",
+          "Integration patterns",
+          "Scalability architecture",
+          "Long-term maintainability"
+        ],
+        "delegation_template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-architect-discovery.md"
+      },
+      {
+        "agent_id": "codex-ux",
+        "perspective": "UX Design Excellence",
+        "codex_expert": "Scope Analyst",
+        "mode": "Advisory",
+        "focus_areas": [
+          "User experience flow",
+          "Accessibility compliance",
+          "Design consistency",
+          "Interaction patterns",
+          "Error state design"
+        ],
+        "delegation_template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-ux-discovery.md"
+      },
+      {
+        "agent_id": "codex-algorithm",
+        "perspective": "Algorithm Elegance & Efficiency",
+        "codex_expert": "Code Reviewer",
+        "mode": "Advisory",
+        "focus_areas": [
+          "Algorithm complexity",
+          "Data structure choices",
+          "Computational efficiency",
+          "Edge case handling",
+          "Mathematical correctness"
+        ],
+        "delegation_template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-algorithm-discovery.md"
+      },
+      {
+        "agent_id": "codex-security",
+        "perspective": "Security Hardening",
+        "codex_expert": "Security Analyst",
+        "mode": "Advisory",
+        "focus_areas": [
+          "Attack vectors",
+          "Threat modeling",
+          "Security best practices",
+          "Vulnerability patterns",
+          "Defense in depth"
+        ],
+        "delegation_template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-security-discovery.md"
+      }
+    ],
+
+    "web_search_perspectives": [
+      {
+        "agent_id": "best-practices-search",
+        "perspective": "Current Industry Best Practices",
+        "search_template": "{topic} best practices 2026",
+        "focus_areas": [
+          "Latest recommendations",
+          "Security advisories",
+          "Performance benchmarks",
+          "Library updates",
+          "Deprecation notices"
+        ]
+      }
+    ]
+  },
+
+  "verification_perspectives": {
+    "description": "Phase 4: Consensus verification - each agent independently verifies metrics",
+
+    "agents": [
+      {
+        "agent_id": "security-privacy",
+        "perspective": "Security Verification",
+        "subagent_type": "security-privacy",
+        "required_metrics": ["phi_exposure_count", "encryption_coverage", "audit_completeness"],
+        "veto_power": true,
+        "veto_conditions": ["Any PHI exposure", "HIPAA violation", "Unencrypted sensitive data"]
+      },
+      {
+        "agent_id": "test-lead",
+        "perspective": "Test Coverage Verification",
+        "subagent_type": "test-lead",
+        "required_metrics": ["test_count", "coverage_percent", "regression_failures"],
+        "veto_power": false
+      },
+      {
+        "agent_id": "tech-lead",
+        "perspective": "Architecture Verification",
+        "subagent_type": "tech-lead",
+        "required_metrics": ["layer_violations", "type_errors", "lint_errors"],
+        "veto_power": true,
+        "veto_conditions": ["Architecture boundary violation", "Type system compromise"]
+      },
+      {
+        "agent_id": "mobile-lead",
+        "perspective": "Platform Verification",
+        "subagent_type": "mobile-lead",
+        "required_metrics": ["ios_build", "android_build", "web_build"],
+        "veto_power": false
+      },
+      {
+        "agent_id": "codex-architect",
+        "perspective": "Architecture Quality Verification",
+        "codex_expert": "Architect",
+        "mode": "Advisory",
+        "required_metrics": ["design_quality_score", "maintainability_index"],
+        "veto_power": false
+      }
+    ],
+
+    "consensus_rules": {
+      "default_threshold": 0.75,
+      "critical_goals_threshold": 1.0,
+      "veto_overrides_consensus": true,
+      "minimum_agents_required": 3,
+      "all_metrics_must_pass": true
+    }
+  },
+
+  "metric_templates": {
+    "description": "Reusable metric definitions for common verification patterns",
+
+    "security": [
+      {
+        "metric_id": "phi_exposure_count",
+        "name": "PHI Exposure Count",
+        "command": "grep -rn 'bloodPressure\\|heartRate\\|medications\\|diagnosis' --include='*.ts' packages/ | grep -v '.spec.ts' | grep -v '.test.ts' | grep -v 'type\\|interface' | wc -l",
+        "parse_type": "integer",
+        "expected_value": 0,
+        "comparison": "eq",
+        "tolerance": 0
+      },
+      {
+        "metric_id": "encryption_coverage",
+        "name": "Encrypted Storage Usage",
+        "command": "grep -rn 'EncryptedStorageAdapter' packages/mobile/src --include='*.ts' | wc -l",
+        "parse_type": "integer",
+        "expected_value": 1,
+        "comparison": "gte",
+        "tolerance": 0
+      }
+    ],
+    "testing": [
+      {
+        "metric_id": "test_count",
+        "name": "Test File Count",
+        "command": "find packages -name '*.spec.ts' -o -name '*.test.ts' | wc -l",
+        "parse_type": "integer",
+        "comparison": "gte"
+      },
+      {
+        "metric_id": "coverage_percent",
+        "name": "Code Coverage Percentage",
+        "command": "pnpm test:coverage --json 2>/dev/null | jq '.total.lines.pct'",
+        "parse_type": "float",
+        "expected_value": 80,
+        "comparison": "gte",
+        "tolerance": 5
+      }
+    ],
+    "architecture": [
+      {
+        "metric_id": "layer_violations",
+        "name": "Layer Violation Count",
+        "command": "grep -rn 'journey.*foundation\\|composition.*journey' packages/ --include='*.ts' | wc -l",
+        "parse_type": "integer",
+        "expected_value": 0,
+        "comparison": "eq",
+        "tolerance": 0
+      },
+      {
+        "metric_id": "type_errors",
+        "name": "TypeScript Error Count",
+        "command": "pnpm typecheck 2>&1 | grep 'error TS' | wc -l",
+        "parse_type": "integer",
+        "expected_value": 0,
+        "comparison": "eq",
+        "tolerance": 0
+      }
+    ],
+    "quality": [
+      {
+        "metric_id": "lint_errors",
+        "name": "ESLint Error Count",
+        "command": "pnpm lint 2>&1 | grep -E '^\\s+[0-9]+:[0-9]+\\s+error' | wc -l",
+        "parse_type": "integer",
+        "expected_value": 0,
+        "comparison": "eq",
+        "tolerance": 0
+      }
+    ]
+  }
+}

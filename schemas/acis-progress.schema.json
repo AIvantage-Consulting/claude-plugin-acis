@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIS Progress",
+  "description": "Per-goal iteration history for fresh-agent continuation (.acis/progress/{goal-id}.json)",
+  "type": "object",
+  "required": ["goalId", "iterations", "currentMeasurement"],
+  "properties": {
+    "goalId": {
+      "type": "string",
+      "description": "Goal ID this progress tracks"
+    },
+    "goalFile": {
+      "type": "string",
+      "description": "Path to the goal JSON file"
+    },
+    "discoveryFile": {
+      "type": "string",
+      "description": "Path to the DISCOVERY.md for this goal"
+    },
+    "iterations": {
+      "type": "array",
+      "description": "History of fix iterations (read by fresh agents)",
+      "items": {
+        "type": "object",
+        "required": ["number", "agentType", "action", "result", "contextUsed"],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "agentType": {
+            "type": "string",
+            "description": "Agent that performed this iteration"
+          },
+          "action": {
+            "type": "string",
+            "description": "What the agent did"
+          },
+          "filesModified": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "result": {
+            "type": "string",
+            "enum": ["success", "partial", "blocked", "failed"]
+          },
+          "commit": {
+            "type": "string",
+            "description": "Git commit hash if changes were committed"
+          },
+          "contextUsed": {
+            "type": "number",
+            "description": "Percentage of context used (0-100)"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional context for next iteration"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "currentMeasurement": {
+      "type": "object",
+      "description": "Latest measurement from detection command",
+      "required": ["command", "currentValue", "targetValue", "status"],
+      "properties": {
+        "command": { "type": "string" },
+        "currentValue": { "type": ["string", "number"] },
+        "targetValue": { "type": ["string", "number"] },
+        "status": {
+          "type": "string",
+          "enum": ["achieved", "not-achieved", "error", "pending"]
+        },
+        "measuredAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "fiveWhysAnalyses": {
+      "type": "array",
+      "description": "5 Whys analyses performed during iterations",
+      "items": {
+        "type": "object",
+        "required": ["iteration", "problem", "rootCause"],
+        "properties": {
+          "iteration": { "type": "integer" },
+          "problem": { "type": "string" },
+          "why1": { "type": "string" },
+          "why2": { "type": "string" },
+          "why3": { "type": "string" },
+          "why4": { "type": "string" },
+          "why5": { "type": "string" },
+          "rootCause": { "type": "string" },
+          "fixPlan": { "type": "string" }
+        }
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "description": "Checkpoints where human input was required",
+      "items": {
+        "type": "object",
+        "required": ["iteration", "type", "question"],
+        "properties": {
+          "iteration": { "type": "integer" },
+          "type": {
+            "type": "string",
+            "enum": ["decision", "verification", "blocked"]
+          },
+          "question": { "type": "string" },
+          "userResponse": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

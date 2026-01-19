@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIS State",
+  "description": "Global state file for ACIS context isolation (.acis/STATE.md structured data)",
+  "type": "object",
+  "required": ["position", "sessionContinuity"],
+  "properties": {
+    "position": {
+      "type": "object",
+      "description": "Current execution position",
+      "required": ["activeGoal", "loop", "status"],
+      "properties": {
+        "activeGoal": {
+          "type": ["string", "null"],
+          "description": "Currently active goal ID (null if none)"
+        },
+        "loop": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "1=Process Auditor, 2=Discovery, 3=Remediation"
+        },
+        "iteration": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current iteration within the loop"
+        },
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20,
+          "description": "Maximum iterations before escalation"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "discovery-in-progress",
+            "fix-in-progress",
+            "verify-in-progress",
+            "checkpoint-waiting",
+            "achieved",
+            "escalated",
+            "blocked"
+          ]
+        }
+      }
+    },
+    "accumulatedDecisions": {
+      "type": "array",
+      "description": "Decisions made during discovery that affect current work",
+      "items": {
+        "type": "object",
+        "required": ["id", "decision", "source"],
+        "properties": {
+          "id": { "type": "string" },
+          "decision": { "type": "string" },
+          "source": {
+            "type": "string",
+            "enum": ["discovery", "ceo-consensus", "user", "architectural-constraint"]
+          },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "description": "Current blockers preventing progress",
+      "items": {
+        "type": "object",
+        "required": ["description", "severity"],
+        "properties": {
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "resolution": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "recentCompletions": {
+      "type": "array",
+      "description": "Recently completed goals (for pattern analysis)",
+      "items": {
+        "type": "object",
+        "required": ["goalId", "iterations", "completedAt"],
+        "properties": {
+          "goalId": { "type": "string" },
+          "iterations": { "type": "integer" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "contextUsed": { "type": "number", "description": "Average context % per iteration" }
+        }
+      }
+    },
+    "sessionContinuity": {
+      "type": "object",
+      "description": "Information for session restoration",
+      "required": ["lastAction", "resumeFrom"],
+      "properties": {
+        "lastAction": { "type": "string" },
+        "resumeFrom": { "type": "string" },
+        "lastAgentType": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "pluginStatus": {
+      "type": "object",
+      "description": "Current plugin availability",
+      "properties": {
+        "codexAvailable": { "type": "boolean" },
+        "ralphLoopAvailable": { "type": "boolean" },
+        "degradedMode": { "type": "boolean" },
+        "degradedReason": { "type": "string" }
+      }
+    }
+  }
+}

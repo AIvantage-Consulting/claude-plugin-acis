@@ -1,0 +1,93 @@
+{
+  "$schema": "../schemas/project-config.schema.json",
+  "projectName": "CareAICompanion",
+  "vision": {
+    "problem": "Elderly patients struggle to manage complex medication regimens, track vital signs, and communicate health information to caregivers and providers. Current solutions are fragmented and not designed for aging users.",
+    "solution": "A privacy-first healthcare companion that provides voice-driven medication management, caregiver coordination, and seamless provider communication while keeping sensitive health data encrypted and under user control.",
+    "scope": "In scope: medication tracking, vital signs, caregiver alerts, provider summaries. Out of scope: diagnosis, treatment recommendations, emergency response dispatch.",
+    "successMetrics": [
+      "Brenda can look up medications by voice without errors",
+      "David receives timely alerts when mom misses medications",
+      "Dr. Evans can access patient summaries securely",
+      "System works fully offline for core features"
+    ]
+  },
+  "personas": [
+    {
+      "name": "Brenda",
+      "role": "elderly patient",
+      "type": "primary",
+      "description": "82-year-old woman managing multiple chronic conditions (hypertension, diabetes, arthritis). Lives alone but wants to maintain independence. Limited tech experience but motivated to stay healthy.",
+      "keyNeed": "Simple, reliable way to manage 8+ daily medications without confusion",
+      "frustration": "Current apps have tiny text, complex navigation, and require internet connection"
+    },
+    {
+      "name": "David",
+      "role": "caregiver",
+      "type": "primary",
+      "description": "52-year-old adult son who lives 30 minutes away. Works full-time but worries about his mother. Needs peace of mind that she's taking medications and staying healthy.",
+      "keyNeed": "Real-time visibility into mom's health without being intrusive",
+      "frustration": "Has to call multiple times daily to check if mom took her pills"
+    },
+    {
+      "name": "Dr. Evans",
+      "role": "provider",
+      "type": "secondary",
+      "description": "Primary care physician managing 2000+ patients. Has 15-minute appointment slots. Needs quick access to patient health trends.",
+      "keyNeed": "Actionable health summaries that surface concerns quickly",
+      "frustration": "Patients bring incomplete or inaccurate medication lists to appointments"
+    }
+  ],
+  "compliance": ["HIPAA"],
+  "architectureModel": "three-layer",
+  "platform": {
+    "web": true,
+    "mobile": true,
+    "ios": true,
+    "android": true,
+    "desktop": false,
+    "offline": true,
+    "voice": true
+  },
+  "integrations": [
+    "OpenAI (local inference preferred)",
+    "Firebase (auth only, no PHI)"
+  ],
+  "techStack": {
+    "language": "TypeScript",
+    "framework": "Expo/React Native",
+    "runtime": "Node.js",
+    "database": "SQLite (encrypted)",
+    "testFramework": "Jest",
+    "packageManager": "pnpm"
+  },
+  "customMetrics": [
+    {
+      "id": "phi_exposure_count",
+      "name": "PHI Exposure Count",
+      "command": "grep -rn 'bloodPressure\\|heartRate\\|medications' packages/ | grep -v '.spec.ts' | grep -v 'node_modules' | grep -v '.d.ts' | wc -l | tr -d ' '",
+      "expected_value": 0,
+      "comparison": "eq"
+    },
+    {
+      "id": "math_random_count",
+      "name": "Math.random Usage Count",
+      "command": "grep -rn 'Math\\.random' packages/ | grep -v 'node_modules' | wc -l | tr -d ' '",
+      "expected_value": 0,
+      "comparison": "eq"
+    },
+    {
+      "id": "layer_violation_count",
+      "name": "Architecture Layer Violations",
+      "command": "grep -rn 'from.*journey' packages/foundation/ 2>/dev/null | wc -l | tr -d ' '",
+      "expected_value": 0,
+      "comparison": "eq"
+    }
+  ],
+  "goalsDirectory": "docs/reviews/goals",
+  "auditsDirectory": "docs/audits",
+  "skillsDirectory": "skills",
+  "auditThreshold": 3,
+  "generatedFrom": "manual",
+  "generatedAt": "2026-01-19T00:00:00Z"
+}

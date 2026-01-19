@@ -1,0 +1,211 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "profile": "behavioral-tdd",
+  "description": "Loop 3 (Innermost): Surgical problem-solving with behavioral TDD using fresh agents",
+  "purpose": "Targeted remediation of individual goals using RED → GREEN → VERIFY cycle with fresh context per iteration",
+
+  "trigger": {
+    "type": "command",
+    "commands": [
+      "/acis remediate"
+    ]
+  },
+
+  "context_management": {
+    "pattern": "fresh-agent-per-task",
+    "orchestrator_budget": "15%",
+    "state_files": {
+      "global_state": ".acis/STATE.md",
+      "progress": ".acis/progress/{goal-id}.json",
+      "discovery": ".acis/discovery/{goal-id}.md"
+    },
+    "context_injection": "Use @-file references in prompts, never accumulate context"
+  },
+
+  "phases": [
+    {
+      "name": "MEASURE",
+      "order": 1,
+      "description": "Spawn fresh verify agent to measure current state",
+      "agent": {
+        "type": "acis-verify-agent",
+        "context_budget": "12%",
+        "spawn_pattern": "Task(prompt='Verify goal...', subagent_type='acis-verify-agent')",
+        "context_injection": [
+          "@{goal-file}",
+          "@.acis/progress/{goal-id}.json"
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Spawn fresh acis-verify-agent",
+        "AGENT: Load goal file via @-reference",
+        "AGENT: Execute detection command (Bash 3.2 compatible)",
+        "AGENT: Parse and record current value",
+        "AGENT: Compare to target value",
+        "AGENT: Return {status, currentValue, targetValue, details}",
+        "ORCHESTRATOR: Update progress file with measurement"
+      ],
+      "outputs": ["currentValue", "targetValue", "delta"],
+      "timeout_minutes": 2
+    },
+    {
+      "name": "5-WHYS",
+      "order": 2,
+      "description": "Spawn parallel 5-Whys agents for multi-perspective root cause analysis",
+      "agent": {
+        "type": "parallel-5whys",
+        "context_budget": "50% each",
+        "spawn_pattern": "Multiple Task calls in single message (parallel)",
+        "agents": [
+          { "type": "security-privacy", "lens": "PHI/HIPAA compliance" },
+          { "type": "tech-lead", "lens": "Architecture/design" },
+          { "type": "oracle", "lens": "Crash-resilience" }
+        ],
+        "context_injection": [
+          "@{goal-file}",
+          "@.acis/STATE.md",
+          "@.acis/progress/{goal-id}.json"
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Spawn 3 agents in SINGLE message (parallel)",
+        "AGENT-1 (security): 5 Whys from security perspective",
+        "AGENT-2 (tech-lead): 5 Whys from architecture perspective",
+        "AGENT-3 (oracle): 5 Whys from crash-resilience perspective",
+        "ORCHESTRATOR: Collect all WHY-5 root causes",
+        "ORCHESTRATOR: Synthesize convergence (CONVERGED/PARTIAL/DIVERGED)",
+        "ORCHESTRATOR: Document in progress file"
+      ],
+      "outputs": ["rootCause", "fixPlan", "convergenceStatus"],
+      "min_depth": 5,
+      "timeout_minutes": 10
+    },
+    {
+      "name": "FIX",
+      "order": 3,
+      "description": "Spawn fresh fix agent to implement surgical fix",
+      "agent": {
+        "type": "acis-fix-agent",
+        "context_budget": "50%",
+        "spawn_pattern": "Task(prompt='Execute fix...', subagent_type='acis-fix-agent')",
+        "context_injection": [
+          "@{goal-file}",
+          "@.acis/STATE.md",
+          "@.acis/progress/{goal-id}.json",
+          "@.acis/discovery/{goal-id}.md"
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Spawn fresh acis-fix-agent with full context injection",
+        "AGENT: Read previous iterations from progress file",
+        "AGENT: Apply fix plan from 5 Whys analysis",
+        "AGENT: Minimal diff only - no unrelated changes",
+        "AGENT: Update tests if required",
+        "AGENT: Return {result, filesModified, notes}",
+        "ORCHESTRATOR: If result == 'partial' && agent hit 50% context: spawn new fresh agent",
+        "ORCHESTRATOR: Append iteration to progress file"
+      ],
+      "constraints": [
+        "no_ts_ignore",
+        "no_any_unless_existing",
+        "no_test_deletion",
+        "no_scope_reduction",
+        "minimal_diff"
+      ],
+      "outputs": ["codeChanges", "testUpdates", "iterationResult"],
+      "timeout_minutes": 20
+    },
+    {
+      "name": "VERIFY",
+      "order": 4,
+      "description": "Spawn fresh verify agent to confirm fix",
+      "agent": {
+        "type": "acis-verify-agent",
+        "context_budget": "12%",
+        "spawn_pattern": "Task(prompt='Verify goal...', subagent_type='acis-verify-agent')",
+        "context_injection": [
+          "@{goal-file}",
+          "@.acis/progress/{goal-id}.json"
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Spawn fresh acis-verify-agent",
+        "AGENT: Re-run detection command",
+        "AGENT: Compare new value to target",
+        "AGENT: Run related tests for regression check",
+        "AGENT: Return {status, verificationResult}",
+        "ORCHESTRATOR: If achieved → go to Phase 4 (Consensus)",
+        "ORCHESTRATOR: If not achieved → loop back to MEASURE",
+        "ORCHESTRATOR: Update goal status and progress file"
+      ],
+      "outputs": ["verificationResult", "goalStatus"],
+      "timeout_minutes": 5
+    }
+  ],
+
+  "iteration_control": {
+    "max_iterations": 10,
+    "on_max_reached": "escalate_to_loop_2",
+    "escalation_message": "Goal {goal_id} not achieved after {max_iterations} iterations. May need new discovery."
+  },
+
+  "completion_criteria": {
+    "primary": "detection_command_returns_target_value",
+    "secondary": [
+      "tests_pass",
+      "no_regressions",
+      "progress_documented"
+    ]
+  },
+
+  "tdd_cycle": {
+    "pattern": "RED → GREEN → VERIFY",
+    "red": {
+      "description": "Detection command shows issue exists",
+      "commit_tag": "[RED]"
+    },
+    "green": {
+      "description": "Minimal code to make detection pass",
+      "commit_tag": "[GREEN]"
+    },
+    "verify": {
+      "description": "Confirm fix with detection command and tests",
+      "commit_tag": "[VERIFY]"
+    }
+  },
+
+  "escalation": {
+    "to_loop_2": {
+      "condition": "max_iterations_exceeded",
+      "action": "request_new_discovery",
+      "message": "Cannot achieve goal with current approach. Requesting re-analysis."
+    },
+    "to_user": {
+      "condition": "blocked_by_external_dependency",
+      "action": "pause_and_notify"
+    }
+  },
+
+  "integration": {
+    "triggered_by_loop_2": true,
+    "reports_to_loop_1": ["iteration_count", "fix_type", "success_status"],
+    "reports_to_loop_2": ["achievement_status", "blockers"]
+  },
+
+  "safety_rules": {
+    "forbidden_patterns": [
+      "@ts-ignore",
+      "any (unless existing)",
+      "test deletion",
+      "assertion removal",
+      "error swallowing",
+      "scope reduction"
+    ],
+    "required_practices": [
+      "5 Whys before fixing",
+      "Minimal diff",
+      "Test preservation",
+      "Progress documentation"
+    ]
+  }
+}

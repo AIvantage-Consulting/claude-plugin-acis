@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "profile": "process-auditor",
+  "description": "Loop 1 (Outermost): Process observation and improvement cycle using fresh agents",
+  "purpose": "Continuous improvement of the ACIS process itself through pattern analysis and skill extraction with fresh context per analysis",
+
+  "trigger": {
+    "type": "threshold_or_manual",
+    "conditions": [
+      {
+        "type": "goal_count",
+        "threshold": "${config.auditThreshold || 3}",
+        "description": "After N goals achieved since last audit"
+      },
+      {
+        "type": "milestone",
+        "event": "all_pr_goals_achieved",
+        "description": "When all goals for a PR are complete"
+      },
+      {
+        "type": "manual",
+        "command": "/acis audit",
+        "description": "User explicitly requests audit"
+      }
+    ]
+  },
+
+  "context_management": {
+    "pattern": "fresh-agent-per-task",
+    "orchestrator_budget": "15%",
+    "state_files": {
+      "global_state": ".acis/STATE.md",
+      "audit_history": "docs/audits/"
+    },
+    "audit_scope_injection": "Pass completed goal files as @-references, not accumulated content"
+  },
+
+  "phases": [
+    {
+      "name": "PAUSE",
+      "order": 1,
+      "description": "Halt active work, establish audit scope",
+      "actions": [
+        "Check for active remediation (goal with status: in_progress)",
+        "If active: Save state to docs/status/state.json",
+        "Establish scope: timestamp of last audit, goals modified since",
+        "Load config from .acis-config.json"
+      ],
+      "outputs": ["scope", "config"],
+      "timeout_minutes": 2
+    },
+    {
+      "name": "REFLECT",
+      "order": 2,
+      "description": "Spawn fresh analysis agent to analyze completed remediation cycles",
+      "agent": {
+        "type": "oracle",
+        "context_budget": "50%",
+        "spawn_pattern": "Task(prompt='Analyze completed goals...', subagent_type='oracle')",
+        "context_injection": [
+          "@.acis/STATE.md",
+          "@{list of completed goal files}"
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Identify goal files modified since last audit",
+        "ORCHESTRATOR: Spawn fresh oracle agent with @-file references",
+        "AGENT: Analyze each goal: status, iterations, detection.command, progress.notes",
+        "AGENT: Build pattern matrix by lens/category, fix type, iteration count",
+        "AGENT: Apply reflection prompts from ${CLAUDE_PLUGIN_ROOT}/audit/reflection-prompts.md",
+        "AGENT: Return {patterns, metrics, insights}",
+        "ORCHESTRATOR: Store results for LEARN phase"
+      ],
+      "outputs": ["goals", "patterns", "metrics"],
+      "timeout_minutes": 10
+    },
+    {
+      "name": "LEARN",
+      "order": 3,
+      "description": "Spawn parallel agents to identify reinforcements, corrections, and skill candidates",
+      "agents": {
+        "parallel_execution": "Three agents in SINGLE message",
+        "agents": [
+          {
+            "type": "oracle",
+            "focus": "reinforcements",
+            "description": "Identify what worked well"
+          },
+          {
+            "type": "oracle",
+            "focus": "corrections",
+            "description": "Identify what needs improvement"
+          },
+          {
+            "type": "oracle",
+            "focus": "skill-candidates",
+            "description": "Identify repeated patterns worthy of skill extraction"
+          }
+        ]
+      },
+      "actions": [
+        "ORCHESTRATOR: Spawn 3 analysis agents in SINGLE message (parallel)",
+        "AGENT-1: REINFORCEMENTS: Detection commands with 100% accuracy, goals achieved in ≤2 iterations",
+        "AGENT-2: CORRECTIONS: Goals >5 iterations, false positive/negatives, rework patterns",
+        "AGENT-3: SKILL CANDIDATES: Scan for repeated step sequences (5+ occurrences)",
+        "ORCHESTRATOR: Collect all results",
+        "ORCHESTRATOR: Score skill candidates: frequency, ROI, step count, recency",
+        "ORCHESTRATOR: Validate: project-specific, measurable, 3+ steps"
+      ],
+      "outputs": ["reinforcements", "corrections", "skillCandidates"],
+      "timeout_minutes": 15
+    },
+    {
+      "name": "APPLY",
+      "order": 4,
+      "description": "Apply process improvements and generate skills",
+      "actions": [
+        "PROCESS ADJUSTMENTS: Propose changes, ask user to approve/modify/reject",
+        "SKILL GENERATION: For each candidate meeting ALL criteria, generate SKILL.md",
+        "SKILL DEPRECATION: Flag unused skills, propose archival",
+        "Write skills to skills/{skill-name}/SKILL.md"
+      ],
+      "outputs": ["adjustments", "generatedSkills", "deprecatedSkills"],
+      "requires_approval": true,
+      "timeout_minutes": 20
+    },
+    {
+      "name": "DOCUMENT",
+      "order": 5,
+      "description": "Generate audit report and update state",
+      "actions": [
+        "Generate audit report using ${CLAUDE_PLUGIN_ROOT}/audit/audit-report.template.md",
+        "Write to docs/audits/AUDIT-{timestamp}.md",
+        "Update last_audit timestamp in state",
+        "Reset goal counter",
+        "Display completion summary"
+      ],
+      "outputs": ["auditReport", "updatedState"],
+      "timeout_minutes": 5
+    }
+  ],
+
+  "completion_criteria": {
+    "all_required": [
+      "audit_report_generated",
+      "state_updated",
+      "skill_candidates_evaluated"
+    ],
+    "any_optional": [
+      "skills_generated",
+      "adjustments_applied"
+    ]
+  },
+
+  "escalation": {
+    "on_phase_failure": "retry_once_then_skip",
+    "on_approval_timeout": "defer_to_next_audit",
+    "max_retries": 2
+  },
+
+  "integration": {
+    "triggers_loop_2": false,
+    "receives_from_loop_2": ["patterns", "friction_points", "effectiveness_metrics"],
+    "receives_from_loop_3": ["iteration_counts", "fix_types", "success_rates"]
+  },
+
+  "skill_detection": {
+    "min_frequency": 5,
+    "min_roi_percentage": 20,
+    "min_step_count": 3,
+    "scoring_weights": {
+      "frequency": 0.30,
+      "roi": 0.30,
+      "step_count": 0.20,
+      "recency": 0.20
+    }
+  }
+}

@@ -1,0 +1,491 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careaicompanion.dev/schemas/acis-decision-manifest.schema.json",
+  "title": "ACIS Decision Manifest",
+  "description": "Binding document that captures all decisions before implementation, ensuring AI-generated code is coherent and discipline-bound",
+  "type": "object",
+  "required": ["manifest_id", "topic", "created_at", "disciplines", "decisions"],
+  "properties": {
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^DISC-\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]+$",
+      "description": "Unique manifest ID (e.g., DISC-2026-01-19-offline-voice)"
+    },
+    "topic": {
+      "type": "string",
+      "description": "The discovery topic that generated this manifest"
+    },
+    "discovery_type": {
+      "type": "string",
+      "enum": ["feature", "refactor", "audit", "what-if", "bug-hunt"],
+      "description": "Type of discovery investigation"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When all decisions were resolved"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "pending-resolution", "resolved", "implemented"],
+      "default": "draft"
+    },
+
+    "exploration_summary": {
+      "type": "object",
+      "description": "Summary of Phase 1 exploration",
+      "properties": {
+        "perspectives_consulted": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "codex_delegations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "web_searches": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "files_analyzed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "key_findings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "disciplines": {
+      "type": "object",
+      "description": "Core engineering disciplines this implementation must follow",
+      "required": ["items"],
+      "properties": {
+        "description": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["discipline", "principle", "test_command"],
+            "properties": {
+              "discipline": {
+                "type": "string",
+                "description": "Name of the discipline (e.g., offline-first, phi-encryption)"
+              },
+              "principle": {
+                "type": "string",
+                "description": "The principle statement"
+              },
+              "test_command": {
+                "type": "string",
+                "description": "Command to verify discipline is upheld"
+              },
+              "violation_severity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"],
+                "default": "high"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "decisions": {
+      "type": "object",
+      "required": ["resolved", "inherited", "pending"],
+      "properties": {
+        "resolved": {
+          "type": "array",
+          "description": "Decisions explicitly resolved during discovery",
+          "items": { "$ref": "#/$defs/resolved_decision" }
+        },
+        "inherited": {
+          "type": "array",
+          "description": "Decisions inherited from existing codebase",
+          "items": { "$ref": "#/$defs/inherited_decision" }
+        },
+        "pending": {
+          "type": "array",
+          "description": "Decisions awaiting owner resolution",
+          "items": { "$ref": "#/$defs/pending_decision" }
+        }
+      }
+    },
+
+    "dependency_map": {
+      "type": "object",
+      "description": "Visual and structured dependency relationships",
+      "properties": {
+        "ascii_diagram": {
+          "type": "string",
+          "description": "ASCII art visualization of decision dependencies"
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["depends_on", "enables", "conflicts_with", "tension"]
+              },
+              "from_decision": { "type": "string" },
+              "to_decision": { "type": "string" },
+              "implication": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "implementation_binding": {
+      "type": "object",
+      "description": "Rules that MUST be followed during implementation",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": { "type": "string" },
+              "pattern": { "type": "string" },
+              "violation_action": {
+                "type": "string",
+                "enum": ["block", "warn", "log"],
+                "default": "block"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "formal_tests": {
+      "type": "object",
+      "properties": {
+        "decision_tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision_id": { "type": "string" },
+              "test_file": { "type": "string" },
+              "tests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "given": { "type": "string" },
+                    "when": { "type": "string" },
+                    "then": { "type": "string" },
+                    "status": {
+                      "type": "string",
+                      "enum": ["exists", "pending", "proposed"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "discipline_tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "discipline": { "type": "string" },
+              "test_command": { "type": "string" },
+              "expected": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "generated_artifacts": {
+      "type": "object",
+      "properties": {
+        "discovery_report": { "type": "string" },
+        "feature_spec": { "type": "string" },
+        "goal_files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "adr_drafts": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "ceo_recommendation": {
+      "type": "object",
+      "required": ["agent", "perspective", "recommendation", "confidence", "reasoning"],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "enum": ["codex", "claude-oracle"]
+        },
+        "perspective": {
+          "type": "string",
+          "enum": ["AI-Native Engineering CEO", "Modern SWE Discipline CEO"]
+        },
+        "recommendation": {
+          "description": "The recommended option value"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "reasoning": {
+          "type": "object",
+          "properties": {
+            "primary_why": {
+              "type": "string",
+              "description": "One sentence core reason"
+            },
+            "modern_swe_analysis": {
+              "type": "object",
+              "properties": {
+                "testability": { "type": "string" },
+                "observability": { "type": "string" },
+                "failure_modes": { "type": "string" },
+                "technical_debt": { "type": "string" }
+              }
+            },
+            "ai_native_analysis": {
+              "type": "object",
+              "properties": {
+                "pattern_clarity": { "type": "string" },
+                "context_capture": { "type": "string" },
+                "constraint_benefit": { "type": "string" },
+                "amplification_risk": { "type": "string" }
+              }
+            },
+            "business_rationale": { "type": "string" },
+            "compound_effect": { "type": "string" }
+          }
+        },
+        "dissent_from_other": {
+          "type": ["object", "null"],
+          "properties": {
+            "point": { "type": "string" },
+            "counterargument": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "dual_ceo_analysis": {
+      "type": "object",
+      "required": ["ceo_alpha", "ceo_beta", "convergence"],
+      "properties": {
+        "ceo_alpha": { "$ref": "#/$defs/ceo_recommendation" },
+        "ceo_beta": { "$ref": "#/$defs/ceo_recommendation" },
+        "convergence": {
+          "type": "object",
+          "properties": {
+            "converged": {
+              "type": "boolean",
+              "description": "True if both CEOs recommend the same option"
+            },
+            "agreement_areas": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "disagreement_areas": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "auto_resolved": {
+              "type": "boolean",
+              "description": "True if auto-approved due to convergence"
+            },
+            "resolution_guidance": {
+              "type": "string",
+              "description": "Guidance for owner if manual resolution needed"
+            }
+          }
+        }
+      }
+    },
+
+    "value_framing": {
+      "type": "object",
+      "required": ["category", "dimension", "impact_statement"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["end-user", "operations"]
+        },
+        "dimension": {
+          "type": "string",
+          "enum": [
+            "ux", "performance", "security", "accessibility", "reliability",
+            "cost", "monetization", "maintenance", "scalability", "compliance"
+          ]
+        },
+        "impact_statement": {
+          "type": "string",
+          "description": "Plain English impact description"
+        },
+        "personas_affected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quantifiable_impact": {
+          "type": "object",
+          "properties": {
+            "metric": { "type": "string" },
+            "current": {},
+            "if_changed": {}
+          }
+        }
+      }
+    },
+
+    "resolved_decision": {
+      "type": "object",
+      "required": ["id", "name", "level", "resolution", "dual_ceo_analysis", "value_framing", "tests_required"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^DEC-[A-Z]+-\\d{3}$"
+        },
+        "name": { "type": "string" },
+        "level": {
+          "type": "string",
+          "enum": ["macro", "micro"]
+        },
+        "binding": {
+          "type": "string",
+          "enum": ["hard", "soft"]
+        },
+        "resolution": {
+          "description": "The resolved value"
+        },
+        "resolved_by": {
+          "type": "string",
+          "enum": ["auto-convergence", "project-owner"]
+        },
+        "resolved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dual_ceo_analysis": { "$ref": "#/$defs/dual_ceo_analysis" },
+        "value_framing": { "$ref": "#/$defs/value_framing" },
+        "owner_rationale": {
+          "type": "string",
+          "description": "Owner's explanation if manual resolution"
+        },
+        "tests_required": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer" },
+            "expression": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "inherited_decision": {
+      "type": "object",
+      "required": ["id", "name", "current_value", "source", "must_honor"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": {
+          "type": "string",
+          "enum": ["macro", "micro"]
+        },
+        "current_value": {},
+        "source": {
+          "type": "string",
+          "description": "Where this decision comes from (e.g., existing codebase, ADR-001)"
+        },
+        "must_honor": {
+          "type": "boolean",
+          "description": "Whether implementation must respect this decision"
+        },
+        "implication": {
+          "type": "string",
+          "description": "What this means for the current work"
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "pending_decision": {
+      "type": "object",
+      "required": ["id", "name", "level", "options", "dual_ceo_analysis", "value_framing"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "level": {
+          "type": "string",
+          "enum": ["macro", "micro"]
+        },
+        "binding": {
+          "type": "string",
+          "enum": ["hard", "soft"]
+        },
+        "options": {
+          "type": "array",
+          "items": {},
+          "description": "All valid values this decision could take"
+        },
+        "default_value": {},
+        "dual_ceo_analysis": { "$ref": "#/$defs/dual_ceo_analysis" },
+        "value_framing": { "$ref": "#/$defs/value_framing" },
+        "dependencies": {
+          "type": "object",
+          "properties": {
+            "depends_on": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "enables": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "conflicts_with": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "tests_required": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["blocking", "high", "medium", "low"],
+          "description": "How urgently this needs resolution"
+        }
+      }
+    }
+  }
+}

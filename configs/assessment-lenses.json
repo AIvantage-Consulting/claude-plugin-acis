@@ -1,0 +1,348 @@
+{
+  "$schema": "../schemas/assessment-lenses.schema.json",
+  "version": "1.0.0",
+  "description": "Multi-lens assessment configurations for automated code improvement",
+  "lenses": {
+    "security": {
+      "id": "security",
+      "name": "Security Assessment",
+      "description": "Identifies security vulnerabilities and cryptographic weaknesses",
+      "priority": 1,
+      "patterns": [
+        {
+          "id": "math-random",
+          "pattern": "Math\\.random",
+          "severity": "high",
+          "description": "Insecure random number generation",
+          "replacement": "crypto.getRandomValues() or uuid library",
+          "rationale": "Math.random() is not cryptographically secure and should not be used for security-sensitive operations like generating tokens, IDs, or keys",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts", "__mocks__/**"]
+        },
+        {
+          "id": "hardcoded-secrets",
+          "pattern": "(apiKey|password|secret|token|credential)\\s*[:=]\\s*['\"][^'\"]{8,}['\"]",
+          "severity": "critical",
+          "description": "Hardcoded secrets in source code",
+          "replacement": "Environment variables via process.env or secure vault",
+          "rationale": "Hardcoded secrets can be exposed in version control and logs",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts", "*.example.*", "*.template.*"]
+        },
+        {
+          "id": "dynamic-code-execution",
+          "pattern": "\\bev\\x61l\\s*\\(",
+          "severity": "critical",
+          "description": "Dynamic code execution via code interpreter function",
+          "replacement": "Safe alternatives like JSON.parse() or explicit parsing",
+          "rationale": "Dynamic code execution can run arbitrary code and is a major security risk",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "innerhtml",
+          "pattern": "\\.innerHTML\\s*=",
+          "severity": "high",
+          "description": "Direct innerHTML assignment (XSS risk)",
+          "replacement": "textContent, sanitized HTML, or React JSX",
+          "rationale": "innerHTML can introduce XSS vulnerabilities",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "sql-concatenation",
+          "pattern": "(SELECT|INSERT|UPDATE|DELETE).*\\+.*\\$",
+          "severity": "critical",
+          "description": "SQL string concatenation (injection risk)",
+          "replacement": "Parameterized queries",
+          "rationale": "String concatenation in SQL enables injection attacks",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "privacy": {
+      "id": "privacy",
+      "name": "Privacy & PHI Assessment",
+      "description": "Identifies PHI exposure and privacy violations",
+      "priority": 1,
+      "patterns": [
+        {
+          "id": "console-phi",
+          "pattern": "console\\.(log|info|debug|warn|error)\\s*\\([^)]*\\b(patient|phi|ssn|dob|mrn|diagnosis)",
+          "severity": "critical",
+          "description": "Potential PHI logging to console",
+          "replacement": "PHI-safe logging service that redacts sensitive data",
+          "rationale": "Console logs can expose PHI in browser dev tools and server logs",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "localstorage-phi",
+          "pattern": "localStorage\\.(setItem|getItem)\\s*\\([^)]*\\b(patient|phi|health|medical)",
+          "severity": "critical",
+          "description": "PHI in localStorage (unencrypted)",
+          "replacement": "Secure encrypted storage (expo-secure-store)",
+          "rationale": "localStorage is unencrypted and accessible to any script",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "plain-text-phi",
+          "pattern": "JSON\\.stringify\\([^)]*\\b(patient|phi|healthRecord|medicalData)",
+          "severity": "high",
+          "description": "PHI serialization without encryption",
+          "replacement": "Encrypt before serialization",
+          "rationale": "PHI must be encrypted before storage or transmission",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "performance": {
+      "id": "performance",
+      "name": "Performance Assessment",
+      "description": "Identifies performance anti-patterns",
+      "priority": 2,
+      "patterns": [
+        {
+          "id": "sync-storage",
+          "pattern": "localStorage\\.(setItem|getItem|removeItem)(?!Async)",
+          "severity": "medium",
+          "description": "Synchronous storage operations",
+          "replacement": "Async storage operations",
+          "rationale": "Sync storage blocks the main thread",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "inline-function-props",
+          "pattern": "\\bonPress\\s*=\\s*\\{\\s*\\(\\)\\s*=>",
+          "severity": "low",
+          "description": "Inline arrow functions in JSX props",
+          "replacement": "useCallback or class method",
+          "rationale": "Creates new function references on every render",
+          "file_types": ["*.tsx", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "large-bundle-import",
+          "pattern": "import\\s+\\*\\s+as\\s+\\w+\\s+from\\s+['\"]lodash['\"]",
+          "severity": "medium",
+          "description": "Full lodash import increases bundle size",
+          "replacement": "Import specific functions: import { debounce } from 'lodash/debounce'",
+          "rationale": "Full imports include unused code",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "maintainability": {
+      "id": "maintainability",
+      "name": "Maintainability Assessment",
+      "description": "Identifies code quality and maintainability issues",
+      "priority": 3,
+      "patterns": [
+        {
+          "id": "console-log",
+          "pattern": "console\\.log\\s*\\(",
+          "severity": "medium",
+          "description": "Debug console.log statements",
+          "replacement": "Proper logging service or remove",
+          "rationale": "Debug logs should not be in production code",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts", "scripts/**"]
+        },
+        {
+          "id": "any-type",
+          "pattern": ":\\s*any\\b(?!where)",
+          "severity": "medium",
+          "description": "Explicit any type usage",
+          "replacement": "Proper type definition",
+          "rationale": "any defeats TypeScript's type safety",
+          "file_types": ["*.ts", "*.tsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts", "*.d.ts"]
+        },
+        {
+          "id": "ts-ignore",
+          "pattern": "@ts-ignore",
+          "severity": "high",
+          "description": "TypeScript error suppression",
+          "replacement": "Fix the underlying type error",
+          "rationale": "ts-ignore hides real type problems",
+          "file_types": ["*.ts", "*.tsx"],
+          "exclusions": []
+        },
+        {
+          "id": "empty-catch",
+          "pattern": "catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}",
+          "severity": "high",
+          "description": "Empty catch blocks swallow errors",
+          "replacement": "Proper error handling or logging",
+          "rationale": "Silent failures are hard to debug",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "todo-fixme",
+          "pattern": "(TODO|FIXME|HACK|XXX):",
+          "severity": "low",
+          "description": "TODO/FIXME comments indicating incomplete work",
+          "replacement": "Complete the work or create a ticket",
+          "rationale": "TODOs can accumulate and be forgotten",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": []
+        },
+        {
+          "id": "magic-numbers",
+          "pattern": "\\b(setTimeout|setInterval)\\s*\\([^,]+,\\s*\\d{4,}\\)",
+          "severity": "low",
+          "description": "Magic number in timer (>1000ms)",
+          "replacement": "Named constant with meaningful name",
+          "rationale": "Magic numbers reduce code readability",
+          "file_types": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "accessibility": {
+      "id": "accessibility",
+      "name": "Accessibility Assessment",
+      "description": "Identifies accessibility issues (WCAG compliance)",
+      "priority": 2,
+      "patterns": [
+        {
+          "id": "missing-alt",
+          "pattern": "<(Image|img)[^>]*(?!alt=)[^>]*>",
+          "severity": "high",
+          "description": "Image without alt text",
+          "replacement": "Add descriptive alt attribute",
+          "rationale": "Screen readers need alt text to describe images",
+          "file_types": ["*.tsx", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "missing-accessible-label",
+          "pattern": "<(TouchableOpacity|Pressable|Button)[^>]*(?!accessible)[^>]*>",
+          "severity": "medium",
+          "description": "Interactive element without accessibility props",
+          "replacement": "Add accessible={true} and accessibilityLabel",
+          "rationale": "Interactive elements need labels for screen readers",
+          "file_types": ["*.tsx", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "color-only-indicator",
+          "pattern": "style=\\{[^}]*color:\\s*['\"]?(red|green)['\"]?",
+          "severity": "medium",
+          "description": "Color-only status indicator",
+          "replacement": "Add icon or text alongside color",
+          "rationale": "Color alone is insufficient for colorblind users",
+          "file_types": ["*.tsx", "*.jsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "architecture": {
+      "id": "architecture",
+      "name": "Architecture Assessment",
+      "description": "Identifies architecture violations (layer boundaries)",
+      "priority": 2,
+      "patterns": [
+        {
+          "id": "journey-imports-foundation",
+          "pattern": "from ['\"].*foundation.*['\"]",
+          "severity": "high",
+          "description": "Journey layer importing from Foundation (skip Composition)",
+          "replacement": "Import from Composition layer instead",
+          "rationale": "Journeys must only depend on Composition layer",
+          "file_types": ["*/journeys/**/*.ts", "*/journeys/**/*.tsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        },
+        {
+          "id": "foundation-imports-composition",
+          "pattern": "from ['\"].*composition.*['\"]",
+          "severity": "critical",
+          "description": "Foundation importing from Composition (wrong direction)",
+          "replacement": "Foundation must not depend on Composition",
+          "rationale": "Foundation is the base layer with no dependencies",
+          "file_types": ["*/foundation/**/*.ts", "*/foundation/**/*.tsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    },
+    "testing": {
+      "id": "testing",
+      "name": "Testing Assessment",
+      "description": "Identifies testing anti-patterns",
+      "priority": 3,
+      "patterns": [
+        {
+          "id": "skip-tests",
+          "pattern": "\\.(skip|only)\\s*\\(",
+          "severity": "high",
+          "description": "Skipped or focused tests",
+          "replacement": "Remove .skip/.only before commit",
+          "rationale": "Skipped tests indicate incomplete work; .only blocks other tests",
+          "file_types": ["*.spec.ts", "*.test.ts"],
+          "exclusions": []
+        },
+        {
+          "id": "snapshot-abuse",
+          "pattern": "toMatchSnapshot\\(\\)",
+          "severity": "medium",
+          "description": "Snapshot test without context",
+          "replacement": "Use inline snapshots or specific assertions",
+          "rationale": "Large snapshots are hard to review and maintain",
+          "file_types": ["*.spec.ts", "*.test.ts"],
+          "exclusions": []
+        },
+        {
+          "id": "test-timeout",
+          "pattern": "jest\\.setTimeout\\(\\d{5,}\\)",
+          "severity": "medium",
+          "description": "Very long test timeout (>10s)",
+          "replacement": "Optimize test or mock slow operations",
+          "rationale": "Slow tests indicate integration issues",
+          "file_types": ["*.spec.ts", "*.test.ts"],
+          "exclusions": []
+        }
+      ]
+    },
+    "operational-costs": {
+      "id": "operational-costs",
+      "name": "Operational Costs Assessment",
+      "description": "Identifies patterns that increase operational costs",
+      "priority": 3,
+      "patterns": [
+        {
+          "id": "excessive-logging",
+          "pattern": "console\\.(log|info|debug)\\s*\\([^)]*\\)",
+          "severity": "low",
+          "description": "Verbose logging increases log storage costs",
+          "replacement": "Log only errors and important events",
+          "rationale": "Log storage and processing have costs",
+          "file_types": ["*.ts", "*.tsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts", "scripts/**"]
+        },
+        {
+          "id": "unbounded-retries",
+          "pattern": "while\\s*\\(true\\).*retry",
+          "severity": "high",
+          "description": "Unbounded retry loops",
+          "replacement": "Add max retry count and exponential backoff",
+          "rationale": "Unbounded retries can cause cascading failures and costs",
+          "file_types": ["*.ts", "*.tsx"],
+          "exclusions": ["*.spec.ts", "*.test.ts"]
+        }
+      ]
+    }
+  },
+  "severityWeights": {
+    "critical": 100,
+    "high": 50,
+    "medium": 20,
+    "low": 5
+  },
+  "defaultExclusions": ["node_modules/**", "dist/**", "build/**", ".git/**", "coverage/**"]
+}

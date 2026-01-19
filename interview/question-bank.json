@@ -1,0 +1,412 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Problem Space",
+      "description": "Understanding the problem being solved",
+      "targetDuration": "3-5 minutes",
+      "questions": [
+        {
+          "id": "Q1",
+          "question": "What problem are you trying to solve with this project?",
+          "header": "Problem",
+          "type": "open",
+          "required": true,
+          "topics": ["problem"],
+          "followUps": [
+            "Who experiences this problem most acutely?",
+            "What happens today without this solution?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "User experience gap",
+              "description": "Users struggle to accomplish a task that should be simple"
+            },
+            {
+              "label": "Process inefficiency",
+              "description": "Manual processes that could be automated"
+            },
+            {
+              "label": "Data/information access",
+              "description": "Information exists but is hard to access or use"
+            },
+            {
+              "label": "Compliance/security need",
+              "description": "Regulatory or security requirements not being met"
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "question": "What's the core value proposition? If you had to describe the solution in one sentence, what would it be?",
+          "header": "Value prop",
+          "type": "open",
+          "required": true,
+          "topics": ["solution"],
+          "followUps": [
+            "What makes this different from existing solutions?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Saves time",
+              "description": "Reduces time spent on a task by X%"
+            },
+            {
+              "label": "Reduces errors",
+              "description": "Prevents mistakes through automation or validation"
+            },
+            {
+              "label": "Enables new capability",
+              "description": "Makes something possible that wasn't before"
+            },
+            {
+              "label": "Improves experience",
+              "description": "Makes an existing process more pleasant or intuitive"
+            }
+          ]
+        },
+        {
+          "id": "Q3",
+          "question": "What's the scope boundary? What is explicitly OUT of scope for this project?",
+          "header": "Scope",
+          "type": "open",
+          "required": false,
+          "topics": ["scope"],
+          "followUps": [
+            "Are there related features you're intentionally deferring?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "MVP only",
+              "description": "Core functionality only, no nice-to-haves"
+            },
+            {
+              "label": "Single platform",
+              "description": "Web only, or mobile only - not both"
+            },
+            {
+              "label": "Single user type",
+              "description": "Focusing on one persona first"
+            },
+            {
+              "label": "No integrations yet",
+              "description": "Standalone first, integrations later"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Solution Vision",
+      "description": "Understanding how the solution works",
+      "targetDuration": "3-5 minutes",
+      "questions": [
+        {
+          "id": "Q4",
+          "question": "Walk me through how the end system will work from a user's perspective. Start from when they first open the app...",
+          "header": "User journey",
+          "type": "open",
+          "required": true,
+          "topics": ["journey", "workflow"],
+          "followUps": [
+            "What's the most critical user action in this flow?",
+            "What happens if something goes wrong at any step?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Describe step by step",
+              "description": "I'll walk through the main user flow"
+            },
+            {
+              "label": "Show key screens",
+              "description": "I'll describe the main screens/views"
+            },
+            {
+              "label": "Focus on happy path",
+              "description": "I'll describe when everything works"
+            }
+          ]
+        },
+        {
+          "id": "Q5",
+          "question": "What data does the system need to work with? Any sensitive data (PII, PHI, financial)?",
+          "header": "Data",
+          "type": "open",
+          "required": true,
+          "topics": ["data", "compliance"],
+          "followUps": [
+            "Where does this data come from?",
+            "Who should have access to this data?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "User-generated content",
+              "description": "Text, images, files created by users"
+            },
+            {
+              "label": "Personal information",
+              "description": "Names, emails, preferences (PII)"
+            },
+            {
+              "label": "Health/medical data",
+              "description": "Health records, conditions, medications (PHI)"
+            },
+            {
+              "label": "Financial data",
+              "description": "Payments, transactions, account info"
+            },
+            {
+              "label": "No sensitive data",
+              "description": "Just operational data, nothing sensitive"
+            }
+          ]
+        },
+        {
+          "id": "Q6",
+          "question": "Does this need to work offline? On mobile? Any specific platform requirements?",
+          "header": "Platform",
+          "type": "multi",
+          "required": true,
+          "topics": ["platform"],
+          "followUps": [
+            "What percentage of usage do you expect to be offline?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Web only",
+              "description": "Browser-based application"
+            },
+            {
+              "label": "Mobile app",
+              "description": "iOS and/or Android native app"
+            },
+            {
+              "label": "Offline-first",
+              "description": "Must work without internet connection"
+            },
+            {
+              "label": "Desktop app",
+              "description": "Windows/Mac/Linux application"
+            },
+            {
+              "label": "Cross-platform",
+              "description": "Web + mobile + possibly desktop"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Users & Personas",
+      "description": "Identifying who will use the system",
+      "targetDuration": "2-3 minutes",
+      "questions": [
+        {
+          "id": "Q7",
+          "question": "Who are your PRIMARY users - the ones who will use this daily?",
+          "header": "Primary users",
+          "type": "open",
+          "required": true,
+          "topics": ["personas"],
+          "followUps": [
+            "Give them a name and describe a typical day in their life",
+            "What's their biggest frustration with current solutions?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "End consumers",
+              "description": "General public using the product"
+            },
+            {
+              "label": "Business users",
+              "description": "Employees using it for work tasks"
+            },
+            {
+              "label": "Professionals",
+              "description": "Doctors, lawyers, specialists in their field"
+            },
+            {
+              "label": "Caregivers",
+              "description": "People caring for others (family, patients)"
+            }
+          ]
+        },
+        {
+          "id": "Q8",
+          "question": "Who are SECONDARY users - occasional users or stakeholders who need visibility?",
+          "header": "Secondary users",
+          "type": "open",
+          "required": false,
+          "topics": ["personas"],
+          "followUps": [
+            "How do they interact with primary users?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Administrators",
+              "description": "People managing the system or users"
+            },
+            {
+              "label": "Supervisors",
+              "description": "People overseeing primary users' work"
+            },
+            {
+              "label": "Family members",
+              "description": "People connected to primary users"
+            },
+            {
+              "label": "None yet",
+              "description": "Focusing on primary users only for now"
+            }
+          ]
+        },
+        {
+          "id": "Q9",
+          "question": "Are there any 'anti-personas' - people you're explicitly NOT designing for?",
+          "header": "Anti-personas",
+          "type": "open",
+          "required": false,
+          "topics": ["personas"],
+          "followUps": [],
+          "exampleOptions": [
+            {
+              "label": "Power users",
+              "description": "Not optimizing for advanced/technical users"
+            },
+            {
+              "label": "One-time users",
+              "description": "Not optimizing for people who use it once"
+            },
+            {
+              "label": "Enterprise",
+              "description": "Not building for large organizations"
+            },
+            {
+              "label": "No anti-personas",
+              "description": "Haven't identified anyone to exclude yet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Constraints & Compliance",
+      "description": "Understanding boundaries and success criteria",
+      "targetDuration": "2-3 minutes",
+      "questions": [
+        {
+          "id": "Q10",
+          "question": "Any regulatory or compliance requirements? (HIPAA, GDPR, SOC2, PCI-DSS, etc.)",
+          "header": "Compliance",
+          "type": "multi",
+          "required": true,
+          "topics": ["compliance"],
+          "followUps": [
+            "Have you worked with these requirements before?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "HIPAA",
+              "description": "US healthcare data protection"
+            },
+            {
+              "label": "GDPR",
+              "description": "EU data privacy regulation"
+            },
+            {
+              "label": "SOC2",
+              "description": "Service organization security controls"
+            },
+            {
+              "label": "PCI-DSS",
+              "description": "Payment card industry standards"
+            },
+            {
+              "label": "CCPA",
+              "description": "California consumer privacy"
+            },
+            {
+              "label": "None known",
+              "description": "No specific compliance requirements identified"
+            }
+          ]
+        },
+        {
+          "id": "Q11",
+          "question": "Any technical constraints? Existing systems to integrate with? Required tech stack?",
+          "header": "Tech constraints",
+          "type": "open",
+          "required": false,
+          "topics": ["integrations", "architecture"],
+          "followUps": [
+            "Are there APIs or services you must use?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Existing backend",
+              "description": "Must integrate with current API/database"
+            },
+            {
+              "label": "Specific framework",
+              "description": "Team knows React/Vue/etc."
+            },
+            {
+              "label": "Cloud provider",
+              "description": "Must use AWS/GCP/Azure"
+            },
+            {
+              "label": "No constraints",
+              "description": "Greenfield - can choose anything"
+            }
+          ]
+        },
+        {
+          "id": "Q12",
+          "question": "What does success look like? How will you know this project worked?",
+          "header": "Success metrics",
+          "type": "open",
+          "required": true,
+          "topics": ["success"],
+          "followUps": [
+            "What metrics will you track?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "User adoption",
+              "description": "X users actively using the system"
+            },
+            {
+              "label": "Time savings",
+              "description": "Reduces task time by X%"
+            },
+            {
+              "label": "Error reduction",
+              "description": "Fewer mistakes or incidents"
+            },
+            {
+              "label": "User satisfaction",
+              "description": "NPS or satisfaction scores"
+            },
+            {
+              "label": "Business metrics",
+              "description": "Revenue, cost savings, efficiency"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "topicKeywords": {
+    "compliance": ["HIPAA", "GDPR", "SOC2", "PCI", "CCPA", "compliance", "regulated", "privacy"],
+    "platform.offline": ["offline", "no internet", "disconnected", "sync"],
+    "platform.mobile": ["mobile", "iOS", "Android", "phone", "tablet", "app store"],
+    "platform.web": ["web", "browser", "React", "Vue", "Angular", "website"],
+    "personas.healthcare": ["patient", "doctor", "nurse", "caregiver", "elderly", "medical", "health"],
+    "personas.enterprise": ["employee", "manager", "enterprise", "corporate", "B2B"]
+  }
+}

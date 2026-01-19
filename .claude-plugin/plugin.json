@@ -1,0 +1,56 @@
+{
+  "name": "@aivantage-consulting/acis",
+  "version": "1.1.0",
+  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, and Consensus verification",
+  "author": "aivantage-consulting",
+  "repository": "https://github.com/aivantage-consulting/claude-plugin-acis",
+  "keywords": [
+    "code-review",
+    "tdd",
+    "remediation",
+    "pr-review",
+    "ai-governance",
+    "project-bootstrap"
+  ],
+  "commands": [
+    "acis"
+  ],
+  "subcommands": {
+    "acis": ["init", "status", "extract", "discovery", "remediate", "resolve", "audit"]
+  },
+  "capabilities": {
+    "requires_mcp": ["codex"],
+    "requires_plugins": ["ralph-wiggum"],
+    "requires_tools": [
+      "Task",
+      "Bash",
+      "Grep",
+      "Read",
+      "Edit",
+      "Write",
+      "WebSearch",
+      "AskUserQuestion"
+    ]
+  },
+  "dependencies": {
+    "plugins": [
+      {
+        "name": "ralph-wiggum",
+        "source": "claude-plugins-official",
+        "required": true,
+        "features_without": ["remediation loop", "persistent execution", "autonomous audit"],
+        "install_hint": "Install from Claude marketplace: ralph-wiggum"
+      },
+      {
+        "name": "claude-delegator",
+        "source": "mcp",
+        "required": false,
+        "provides_mcp": "codex",
+        "features_without": ["Codex expert delegations", "CEO-Alpha perspective", "external architecture review"],
+        "skip_flag": "--skip-codex",
+        "install_hint": "Configure Codex MCP server in Claude settings"
+      }
+    ]
+  },
+  "license": "MIT"
+}

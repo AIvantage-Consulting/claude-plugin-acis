@@ -1,0 +1,400 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "acis-v2-goal.schema.json",
+  "title": "ACIS v2 Goal Schema",
+  "description": "Enhanced schema with multi-perspective discovery, behavioral TDD, and independently verifiable metrics",
+  "type": "object",
+  "required": ["id", "source", "detection", "target", "verification", "multi_perspective", "behavioral", "consensus"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (e.g., 'WO63-CRIT-001-key-rotation')",
+      "pattern": "^[A-Z0-9]+-[A-Z]+-[0-9]+-[a-z0-9-]+$"
+    },
+    "source": {
+      "type": "object",
+      "required": ["origin", "lens", "severity"],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["pr-review", "multi-agent-discovery", "manual", "acis-extraction"],
+          "description": "How this goal was created"
+        },
+        "pr_number": { "type": "integer" },
+        "wo_id": { "type": "string" },
+        "lens": {
+          "type": "string",
+          "enum": [
+            "security", "privacy", "performance", "maintainability",
+            "accessibility", "architecture", "testing", "operations",
+            "crash-resilience", "ux", "algorithm-elegance"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "original_comment": { "type": "string" }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "required": ["primary_command", "verifiable_metrics"],
+      "properties": {
+        "primary_command": {
+          "type": "string",
+          "description": "Main detection command"
+        },
+        "pattern": { "type": "string" },
+        "search_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "exclusions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "verifiable_metrics": {
+          "type": "array",
+          "description": "Independently verifiable metrics - ALL agents must be able to verify",
+          "items": {
+            "type": "object",
+            "required": ["metric_id", "name", "command", "expected_value", "tolerance"],
+            "properties": {
+              "metric_id": {
+                "type": "string",
+                "description": "Unique metric identifier"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable metric name"
+              },
+              "command": {
+                "type": "string",
+                "description": "Shell command that outputs a single value"
+              },
+              "parse_type": {
+                "type": "string",
+                "enum": ["integer", "float", "boolean", "percentage"],
+                "default": "integer"
+              },
+              "expected_value": {
+                "oneOf": [
+                  { "type": "integer" },
+                  { "type": "number" },
+                  { "type": "boolean" },
+                  { "type": "string" }
+                ],
+                "description": "Target value for this metric"
+              },
+              "comparison": {
+                "type": "string",
+                "enum": ["eq", "lte", "gte", "lt", "gt", "contains", "not_contains"],
+                "default": "eq"
+              },
+              "tolerance": {
+                "type": "number",
+                "default": 0,
+                "description": "Allowed deviation from expected_value"
+              },
+              "verification_notes": {
+                "type": "string",
+                "description": "How agents should interpret this metric"
+              }
+            }
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "properties": {
+        "measured_at": { "type": "string", "format": "date-time" },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "value": {},
+              "command_output": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["zero", "threshold", "reduction", "existence", "absence", "improvement"]
+        },
+        "primary_metric": {
+          "type": "string",
+          "description": "metric_id of the primary success metric"
+        },
+        "all_metrics_required": {
+          "type": "boolean",
+          "default": true,
+          "description": "All verifiable_metrics must pass for goal to be achieved"
+        }
+      }
+    },
+    "multi_perspective": {
+      "type": "object",
+      "description": "Multi-agent perspective configuration",
+      "required": ["discovery_agents", "verification_agents"],
+      "properties": {
+        "discovery_agents": {
+          "type": "array",
+          "description": "Agents for Phase 1 discovery (run in parallel)",
+          "items": {
+            "type": "object",
+            "required": ["agent_id", "perspective", "source"],
+            "properties": {
+              "agent_id": { "type": "string" },
+              "perspective": {
+                "type": "string",
+                "description": "What this agent analyzes"
+              },
+              "source": {
+                "type": "string",
+                "enum": ["internal", "codex"],
+                "description": "Internal Claude agent or external Codex delegation"
+              },
+              "codex_expert": {
+                "type": "string",
+                "enum": ["Architect", "Code Reviewer", "Security Analyst", "Scope Analyst"],
+                "description": "For Codex delegations, which expert to use"
+              },
+              "prompt_template": {
+                "type": "string",
+                "description": "Path to prompt template for this agent"
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 1,
+                "description": "Importance weight for consensus"
+              }
+            }
+          }
+        },
+        "verification_agents": {
+          "type": "array",
+          "description": "Agents for Phase 4 verification consensus (run in parallel)",
+          "items": {
+            "type": "object",
+            "required": ["agent_id", "perspective", "source", "required_metrics"],
+            "properties": {
+              "agent_id": { "type": "string" },
+              "perspective": { "type": "string" },
+              "source": {
+                "type": "string",
+                "enum": ["internal", "codex"]
+              },
+              "required_metrics": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "metric_ids this agent MUST verify"
+              },
+              "veto_power": {
+                "type": "boolean",
+                "default": false,
+                "description": "Can this agent block consensus alone?"
+              }
+            }
+          }
+        },
+        "consensus_threshold": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1,
+          "default": 0.75,
+          "description": "Fraction of agents that must approve (e.g., 0.75 = 3/4)"
+        }
+      }
+    },
+    "behavioral": {
+      "type": "object",
+      "description": "Behavioral TDD configuration (enabled by default)",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Behavioral TDD is ON by default; use --no-behavioral to disable"
+        },
+        "personas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["Brenda", "David", "Dr. Evans", "System"]
+          },
+          "description": "Which personas are affected by this goal"
+        },
+        "acceptance_scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scenario_id", "given", "when", "then"],
+            "properties": {
+              "scenario_id": { "type": "string" },
+              "persona": { "type": "string" },
+              "given": { "type": "string" },
+              "when": { "type": "string" },
+              "then": { "type": "string" },
+              "and": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "test_file": {
+          "type": "string",
+          "description": "Path to behavioral acceptance test file"
+        }
+      }
+    },
+    "consensus": {
+      "type": "object",
+      "description": "Consensus verification configuration (enabled by default)",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Consensus verification ON by default; use --no-consensus to disable"
+        },
+        "required_approvals": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "Minimum number of agent approvals needed"
+        },
+        "veto_agents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Agent IDs with veto power"
+        },
+        "verification_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent_id": { "type": "string" },
+              "verdict": {
+                "type": "string",
+                "enum": ["APPROVE", "REQUEST_CHANGES", "REJECT"]
+              },
+              "metrics_verified": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "passed": { "type": "boolean" },
+                    "actual_value": {},
+                    "expected_value": {},
+                    "notes": { "type": "string" }
+                  }
+                }
+              },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "complexity": {
+      "type": "object",
+      "properties": {
+        "tier": {
+          "type": "integer",
+          "enum": [1, 2, 3]
+        },
+        "reasoning": { "type": "string" },
+        "requires_user_approval": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["replace", "remove", "refactor", "add", "wrap", "custom"]
+        },
+        "replacement": { "type": "string" },
+        "guidance": { "type": "string" },
+        "five_whys_required": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "achieved", "blocked", "deferred"]
+        },
+        "current_phase": {
+          "type": "string",
+          "enum": ["discovery", "behavioral", "ralph", "consensus", "complete"]
+        },
+        "iterations": { "type": "integer" },
+        "metrics_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "iteration": { "type": "integer" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "metrics": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "discovery_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent_id": { "type": "string" },
+              "findings": { "type": "string" },
+              "refinements_suggested": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "deferred_to": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

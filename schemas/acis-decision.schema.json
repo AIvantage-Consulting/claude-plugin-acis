@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careaicompanion.dev/schemas/acis-decision.schema.json",
+  "title": "ACIS Decision Artifact",
+  "description": "Individual decision artifact with formal specification, value framing, dependencies, and tests",
+  "type": "object",
+  "required": ["id", "level", "status", "specification", "value_framing", "tests"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^DEC-[A-Z]+-\\d{3}$",
+      "description": "Unique decision ID (e.g., DEC-SYNC-001, DEC-VOICE-001)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable decision name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of what this decision governs"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["macro", "micro"],
+      "description": "Macro = architectural/system-wide, Micro = implementation detail"
+    },
+    "binding": {
+      "type": "string",
+      "enum": ["hard", "soft"],
+      "description": "Hard = code-enforced/immutable, Soft = parameterized/configurable"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["wired-in", "pending", "proposed", "resolved", "deprecated"],
+      "description": "Current state of the decision"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "specification": {
+      "type": "object",
+      "required": ["name", "description", "allowed_values"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Technical name of the decision point"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this decision controls"
+        },
+        "current_value": {
+          "description": "Current implementation value (null if pending)"
+        },
+        "allowed_values": {
+          "type": "array",
+          "description": "All valid values this decision could take",
+          "items": {}
+        },
+        "default_value": {
+          "description": "Default if not explicitly set"
+        },
+        "validation_rule": {
+          "type": "string",
+          "description": "Rule for validating the decision value"
+        },
+        "location": {
+          "type": "object",
+          "description": "Where this decision is implemented in code",
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer" },
+            "expression": {
+              "type": "string",
+              "description": "The code expression that embodies this decision"
+            }
+          }
+        }
+      }
+    },
+
+    "value_framing": {
+      "type": "object",
+      "required": ["category", "dimension", "impact_statement"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["end-user", "operations"],
+          "description": "Who is primarily affected"
+        },
+        "dimension": {
+          "type": "string",
+          "enum": [
+            "ux",
+            "performance",
+            "security",
+            "accessibility",
+            "reliability",
+            "cost",
+            "monetization",
+            "maintenance",
+            "scalability",
+            "compliance"
+          ],
+          "description": "Which value dimension this affects"
+        },
+        "impact_statement": {
+          "type": "string",
+          "description": "Plain English: 'This decision affects X for Y users by Z'"
+        },
+        "personas_affected": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Which personas are impacted (Brenda, David, Dr. Evans)"
+        },
+        "quantifiable_impact": {
+          "type": "object",
+          "properties": {
+            "metric": {
+              "type": "string",
+              "description": "The metric this affects"
+            },
+            "current": {
+              "description": "Current metric value"
+            },
+            "if_changed": {
+              "description": "Projected metric value if decision changes"
+            },
+            "unit": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+
+    "dual_ceo_recommendations": {
+      "type": "object",
+      "description": "Independent recommendations from two CEO perspectives",
+      "properties": {
+        "ceo_alpha": {
+          "$ref": "#/$defs/ceo_recommendation"
+        },
+        "ceo_beta": {
+          "$ref": "#/$defs/ceo_recommendation"
+        },
+        "synthesis": {
+          "type": "object",
+          "properties": {
+            "converged": {
+              "type": "boolean",
+              "description": "True if both CEOs recommend the same option"
+            },
+            "agreement_areas": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "disagreement_areas": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "auto_resolvable": {
+              "type": "boolean",
+              "description": "True if can be auto-resolved (CEOs converge)"
+            },
+            "resolution_guidance": {
+              "type": "string",
+              "description": "Guidance for owner if manual resolution needed"
+            }
+          }
+        }
+      }
+    },
+
+    "resolution": {
+      "type": "object",
+      "description": "How this decision was resolved (if resolved)",
+      "properties": {
+        "value": {
+          "description": "The resolved value"
+        },
+        "resolved_by": {
+          "type": "string",
+          "enum": ["auto-convergence", "project-owner", "inherited"]
+        },
+        "resolved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this value was chosen"
+        }
+      }
+    },
+
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Decision IDs this depends on"
+        },
+        "enables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Decision IDs this enables"
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Decision IDs this cannot coexist with"
+        },
+        "tradeoffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision_id": { "type": "string" },
+              "relationship": {
+                "type": "string",
+                "enum": ["tension", "inverse", "proportional"]
+              },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "tests": {
+      "type": "object",
+      "required": ["specification_tests"],
+      "properties": {
+        "specification_tests": {
+          "type": "array",
+          "description": "Tests that verify the decision is correctly implemented",
+          "items": {
+            "type": "object",
+            "required": ["test_id", "description", "given", "when", "then"],
+            "properties": {
+              "test_id": { "type": "string" },
+              "description": { "type": "string" },
+              "given": { "type": "string" },
+              "when": { "type": "string" },
+              "then": { "type": "string" },
+              "and": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "test_file": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["exists", "pending", "proposed", "failing"]
+              }
+            }
+          }
+        },
+        "invariant_tests": {
+          "type": "array",
+          "description": "Tests that must always pass regardless of decision value",
+          "items": {
+            "type": "object",
+            "properties": {
+              "invariant": { "type": "string" },
+              "test_command": { "type": "string" },
+              "expected": { "type": "string" }
+            }
+          }
+        },
+        "boundary_tests": {
+          "type": "array",
+          "description": "Tests for edge cases when decision is at boundary values",
+          "items": {
+            "type": "object",
+            "properties": {
+              "boundary": { "type": "string" },
+              "test_description": { "type": "string" },
+              "expected_behavior": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "discovered_in": {
+          "type": "string",
+          "description": "Manifest ID where this was discovered"
+        },
+        "related_adr": {
+          "type": "string",
+          "description": "Related Architecture Decision Record"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "ceo_recommendation": {
+      "type": "object",
+      "required": ["agent", "perspective", "recommendation", "confidence", "reasoning"],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "enum": ["codex", "claude-oracle"]
+        },
+        "perspective": {
+          "type": "string",
+          "enum": ["AI-Native Engineering CEO", "Modern SWE Discipline CEO"]
+        },
+        "recommendation": {
+          "description": "The recommended option value"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "reasoning": {
+          "type": "object",
+          "required": ["primary_why"],
+          "properties": {
+            "primary_why": {
+              "type": "string",
+              "description": "One sentence core reason for this recommendation"
+            },
+            "modern_swe_analysis": {
+              "type": "object",
+              "description": "Analysis through modern software engineering lens",
+              "properties": {
+                "testability": { "type": "string" },
+                "observability": { "type": "string" },
+                "failure_modes": { "type": "string" },
+                "technical_debt": { "type": "string" }
+              }
+            },
+            "ai_native_analysis": {
+              "type": "object",
+              "description": "Analysis through AI-native development lens",
+              "properties": {
+                "pattern_clarity": {
+                  "type": "string",
+                  "description": "How clear is this for AI to follow consistently?"
+                },
+                "context_capture": {
+                  "type": "string",
+                  "description": "Can this decision be captured in AI context windows?"
+                },
+                "constraint_benefit": {
+                  "type": "string",
+                  "description": "Does this create helpful constraints for AI?"
+                },
+                "amplification_risk": {
+                  "type": "string",
+                  "description": "What gets amplified if AI applies this pattern?"
+                }
+              }
+            },
+            "business_rationale": {
+              "type": "string",
+              "description": "Business justification (value creation, cost, risk)"
+            },
+            "compound_effect": {
+              "type": "string",
+              "description": "Does this compound value or debt over time?"
+            }
+          }
+        },
+        "dissent_from_other": {
+          "type": ["object", "null"],
+          "description": "Counterargument if disagreeing with other CEO",
+          "properties": {
+            "point": { "type": "string" },
+            "counterargument": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

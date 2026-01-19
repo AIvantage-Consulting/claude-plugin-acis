@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/project-config.schema.json",
+  "projectName": "MyProject",
+  "vision": {
+    "problem": "Brief description of the problem being solved",
+    "solution": "Brief description of how the system solves it"
+  },
+  "personas": [
+    {
+      "name": "User",
+      "role": "primary user",
+      "type": "primary",
+      "keyNeed": "What they need most from this system"
+    }
+  ],
+  "compliance": [],
+  "architectureModel": "custom",
+  "platform": {
+    "web": true
+  },
+  "goalsDirectory": "docs/reviews/goals",
+  "generatedFrom": "manual",
+  "generatedAt": "2026-01-19T00:00:00Z"
+}

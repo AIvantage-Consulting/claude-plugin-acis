@@ -1,0 +1,360 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "remediation-goal.schema.json",
+  "title": "Remediation Goal Schema",
+  "description": "Schema for quantifiable improvement targets extracted from code reviews",
+  "type": "object",
+  "required": ["id", "source", "detection", "target", "verification"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for this goal (e.g., 'M2-math-random')",
+      "pattern": "^[A-Z][0-9]+-[a-z0-9-]+$"
+    },
+    "source": {
+      "type": "object",
+      "description": "Where this goal was extracted from",
+      "required": ["reviewer", "comment_id"],
+      "properties": {
+        "reviewer": {
+          "type": "string",
+          "enum": ["codex", "claude", "gemini", "human", "process-auditor"],
+          "description": "Which reviewer identified this issue"
+        },
+        "comment_id": {
+          "type": "string",
+          "description": "Reference to the original review comment"
+        },
+        "pr_number": {
+          "type": "integer",
+          "description": "PR number where review occurred"
+        },
+        "lens": {
+          "type": "string",
+          "enum": [
+            "security",
+            "privacy",
+            "performance",
+            "maintainability",
+            "accessibility",
+            "operational-costs",
+            "architecture",
+            "testing",
+            "documentation"
+          ],
+          "description": "Assessment lens/aspect this goal falls under"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Severity of the issue"
+        },
+        "original_comment": {
+          "type": "string",
+          "description": "The original review comment text"
+        }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "description": "How to detect/find instances of this issue",
+      "required": ["pattern", "command"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to find (e.g., 'Math\\.random')"
+        },
+        "pattern_description": {
+          "type": "string",
+          "description": "Human-readable description of what pattern finds"
+        },
+        "command": {
+          "type": "string",
+          "description": "Full shell command to detect and count (e.g., 'grep -r \"Math\\.random\" --include=\"*.ts\" | wc -l')"
+        },
+        "search_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths to search in (e.g., ['packages/mobile/src'])"
+        },
+        "file_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File extensions to include (e.g., ['*.ts', '*.tsx'])"
+        },
+        "exclusions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Patterns to exclude (e.g., ['*.spec.ts', '*.test.ts', '__mocks__'])"
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "description": "Initial measurement when goal was created",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Initial count of issues found"
+        },
+        "measured_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When baseline was measured"
+        },
+        "command_output": {
+          "type": "string",
+          "description": "Raw output from detection command"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "description": "What the goal should achieve",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["zero", "threshold", "reduction", "existence", "absence"],
+          "description": "Type of target: zero (eliminate all), threshold (below N), reduction (reduce by N%), existence (must exist), absence (must not exist)"
+        },
+        "count": {
+          "type": "integer",
+          "description": "Target count (for 'zero' or 'threshold' types)"
+        },
+        "reduction_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Target reduction percentage (for 'reduction' type)"
+        },
+        "allowed_exceptions": {
+          "type": "object",
+          "description": "Where the pattern is acceptable",
+          "properties": {
+            "in_tests": {
+              "type": "boolean",
+              "description": "Allow in test files"
+            },
+            "in_mocks": {
+              "type": "boolean",
+              "description": "Allow in mock files"
+            },
+            "in_comments": {
+              "type": "boolean",
+              "description": "Allow in code comments"
+            },
+            "patterns": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Specific file patterns where allowed"
+            }
+          }
+        }
+      }
+    },
+    "complexity": {
+      "type": "object",
+      "description": "Complexity classification for agent routing",
+      "properties": {
+        "tier": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "Complexity tier: 1=simple pattern replacement, 2=moderate context-aware, 3=complex architectural"
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Why this complexity tier was assigned"
+        },
+        "agents_required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "tech-lead",
+              "security-privacy",
+              "test-lead",
+              "mobile-lead",
+              "web-lead",
+              "backend-lead",
+              "accessibility-lead",
+              "docs-lead",
+              "devops-lead",
+              "code-reviewer"
+            ]
+          },
+          "description": "Specialized agents needed for this goal"
+        },
+        "phases": {
+          "type": "object",
+          "description": "Agent assignments per phase",
+          "properties": {
+            "analyze": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Agents for ANALYZE phase"
+            },
+            "design": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Agents for DESIGN phase (Tier 2+ only)"
+            },
+            "implement": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Agents for IMPLEMENT phase"
+            },
+            "verify": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Agents for VERIFY phase"
+            }
+          }
+        },
+        "requires_user_approval": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether user must approve design before implementation"
+        }
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "description": "How to fix instances of this issue",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["replace", "remove", "refactor", "add", "wrap", "custom"],
+          "description": "General remediation approach"
+        },
+        "replacement": {
+          "type": "string",
+          "description": "What to replace with (for 'replace' strategy)"
+        },
+        "imports_required": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Import statements needed for replacement"
+        },
+        "context_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "when": { "type": "string", "description": "Context pattern" },
+              "then": { "type": "string", "description": "Specific replacement" }
+            }
+          },
+          "description": "Context-aware replacement rules"
+        },
+        "requires_tests": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether TDD is required (write tests first)"
+        },
+        "five_whys_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether 5 Whys analysis required before fixing"
+        },
+        "manual_review_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether human review needed for each fix"
+        },
+        "guidance": {
+          "type": "string",
+          "description": "Free-form guidance for how to remediate"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "How to verify the goal is achieved",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to run for verification"
+        },
+        "success_condition": {
+          "type": "string",
+          "description": "How to interpret command output as success (e.g., 'exit_code == 0', 'output <= target.count')"
+        },
+        "parse_output": {
+          "type": "string",
+          "enum": ["count", "boolean", "json", "regex"],
+          "description": "How to parse command output"
+        },
+        "output_pattern": {
+          "type": "string",
+          "description": "Regex to extract value from output (for 'regex' parse type)"
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "description": "Tracking progress toward goal",
+      "properties": {
+        "current_count": {
+          "type": "integer",
+          "description": "Most recent count"
+        },
+        "iterations": {
+          "type": "integer",
+          "description": "Number of remediation iterations run"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "iteration": { "type": "integer" },
+              "count": { "type": "integer" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "files_fixed": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "description": "History of measurements"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "achieved", "blocked", "deferred"],
+          "description": "Current status of this goal"
+        },
+        "achieved_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When goal was achieved"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deferred_to": {
+          "type": "string",
+          "description": "Work order ID if deferred (e.g., 'WO-59')"
+        },
+        "related_goals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of related goals"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
