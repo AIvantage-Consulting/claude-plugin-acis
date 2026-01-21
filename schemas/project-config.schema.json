@@ -150,20 +150,73 @@
         }
       }
     },
+    "paths": {
+      "type": "object",
+      "description": "Artifact paths (all relative to project root, no absolute paths, no '..' traversal)",
+      "default": {},
+      "properties": {
+        "acisRoot": {
+          "type": "string",
+          "description": "Root directory for all ACIS artifacts",
+          "default": "docs/acis",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "goals": {
+          "type": "string",
+          "description": "Directory for goal JSON files",
+          "default": "docs/acis/goals",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "discovery": {
+          "type": "string",
+          "description": "Directory for discovery reports",
+          "default": "docs/acis/discovery",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "decisions": {
+          "type": "string",
+          "description": "Directory for decision manifests",
+          "default": "docs/acis/decisions",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "audits": {
+          "type": "string",
+          "description": "Directory for Process Auditor reports",
+          "default": "docs/acis/audits",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "skills": {
+          "type": "string",
+          "description": "Directory for project-specific generated skills",
+          "default": "docs/acis/skills",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "state": {
+          "type": "string",
+          "description": "Directory for runtime state files",
+          "default": "docs/acis/state",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        }
+      },
+      "additionalProperties": false
+    },
     "goalsDirectory": {
       "type": "string",
-      "description": "Directory for goal JSON files",
-      "default": "docs/reviews/goals"
+      "description": "DEPRECATED: Use paths.goals instead. Directory for goal JSON files",
+      "default": "docs/acis/goals",
+      "deprecated": true
     },
     "auditsDirectory": {
       "type": "string",
-      "description": "Directory for Process Auditor reports",
-      "default": "docs/audits"
+      "description": "DEPRECATED: Use paths.audits instead. Directory for Process Auditor reports",
+      "default": "docs/acis/audits",
+      "deprecated": true
     },
     "skillsDirectory": {
       "type": "string",
-      "description": "Directory for dynamically generated skills",
-      "default": "skills"
+      "description": "DEPRECATED: Use paths.skills instead. Directory for dynamically generated skills",
+      "default": "docs/acis/skills",
+      "deprecated": true
     },
     "auditThreshold": {
       "type": "integer",
