@@ -15,19 +15,129 @@ ACIS loads project-specific configuration from `.acis-config.json` in the projec
 Use `/acis init` to create this file interactively.
 
 If no config exists, ACIS uses sensible defaults:
-- `goalsDirectory`: "docs/reviews/goals"
+- `paths.acisRoot`: "docs/acis"
+- `paths.goals`: "docs/acis/goals"
+- `paths.discovery`: "docs/acis/discovery"
+- `paths.decisions`: "docs/acis/decisions"
+- `paths.audits`: "docs/acis/audits"
+- `paths.skills`: "docs/acis/skills"
+- `paths.state`: "docs/acis/state"
 - `compliance`: []
 - `personas`: []
 - `architectureModel`: "custom"
 - `vision`: {} (empty)
 - `platform`: { "web": true }
 
-### Config Loading
+### Config Loading (MANDATORY before any file operations)
 1. Read `.acis-config.json` from project root
 2. If not found, prompt user to run `/acis init`
-3. Merge with defaults for any missing fields
-4. Make config available as `${config.X}` variables
-5. **Apply pluginDefaults automatically** (see below)
+3. Merge with defaults for any missing fields (especially `paths`)
+4. **VALIDATE PATHS** (see Path Validation below - MUST pass before continuing)
+5. Make config available as `${config.paths.X}` variables
+6. **Apply pluginDefaults automatically** (see below)
+
+### Path Validation (ENFORCED at startup)
+
+**Before ANY file operation**, ACIS MUST validate all paths. This prevents nested path bugs and scattered artifacts.
+
+**Validation Rules (ALL must pass)**:
+
+| Rule | Check | Error if Violated |
+|------|-------|-------------------|
+| No Absolute Paths | `path[0] !== '/'` | "ERROR: paths.{key} must be relative, got absolute: {path}" |
+| No Path Traversal | `!path.includes('..')` | "ERROR: paths.{key} contains traversal: {path}" |
+| No Nested Paths | Path doesn't contain duplicate segments | "ERROR: Nested path detected: {path}" |
+| Under acisRoot | `path.startsWith(config.paths.acisRoot)` | "WARNING: paths.{key} is outside acisRoot" |
+
+**Validation Pseudocode (Bash 3.2 Compatible)**:
+```bash
+validate_acis_paths() {
+  local acis_root="${config_paths_acisRoot:-docs/acis}"
+
+  for key in goals discovery decisions audits skills state; do
+    local path="${config_paths[$key]}"
+
+    # Rule 1: No absolute paths
+    if [ "${path:0:1}" = "/" ]; then
+      echo "ERROR: paths.$key must be relative, got absolute: $path" >&2
+      return 1
+    fi
+
+    # Rule 2: No path traversal
+    case "$path" in
+      *..*)
+        echo "ERROR: paths.$key contains traversal: $path" >&2
+        return 1
+        ;;
+    esac
+
+    # Rule 3: Under acisRoot (warning)
+    case "$path" in
+      "$acis_root"/*|"$acis_root") ;;
+      *) echo "WARNING: paths.$key ($path) is outside acisRoot ($acis_root)" >&2 ;;
+    esac
+  done
+
+  return 0
+}
+```
+
+**If validation fails**: STOP immediately. Do not write any files. Report errors to user.
+
+### Safe Path Resolution (MANDATORY for all file writes)
+
+**NEVER** construct output paths like this:
+```bash
+# WRONG - causes nested paths like docs/acis/goals/docs/acis/goals/
+output_path="${config.paths.goals}/${config.paths.goals}/${filename}"
+```
+
+**ALWAYS** construct output paths like this:
+```bash
+# CORRECT - project_root + config_path + filename
+output_path="${PROJECT_ROOT}/${config.paths.goals}/${filename}"
+```
+
+**Resolution Function**:
+```bash
+resolve_acis_path() {
+  local config_path="$1"  # e.g., "docs/acis/goals"
+  local filename="$2"      # e.g., "PR55-G1.json"
+
+  # Validate config_path is relative
+  if [ "${config_path:0:1}" = "/" ]; then
+    echo "ERROR: Config path must be relative" >&2
+    return 1
+  fi
+
+  # Check for nested path (config_path appearing twice)
+  local result="${PROJECT_ROOT}/${config_path}"
+  if [ -n "$filename" ]; then
+    result="${result}/${filename}"
+  fi
+
+  # Normalize (remove double slashes)
+  echo "$result" | sed 's|//|/|g'
+}
+```
+
+### Nested Path Detection (Run at ACIS startup)
+
+Before any operation, check for existing nested paths:
+```bash
+find_nested_acis_paths() {
+  find "${PROJECT_ROOT}" -type d \( \
+    -path "*docs/acis/*docs/acis*" -o \
+    -path "*docs/reviews/*docs/reviews*" \
+  \) 2>/dev/null
+}
+
+# If found, warn user and suggest cleanup
+if [ "$(find_nested_acis_paths | wc -l)" -gt 0 ]; then
+  echo "WARNING: Nested ACIS paths detected. Run cleanup before proceeding."
+  find_nested_acis_paths
+fi
+```
 
 ### Plugin Defaults (Auto-Applied Flags)
 
@@ -64,7 +174,7 @@ ACIS uses a **fresh-agent-per-task** pattern to prevent context rot in nested lo
 
 #### The Solution: State Files + Fresh Agents
 
-**State Files** (in `.acis/` directory):
+**State Files** (in `${config.paths.state}` directory, default: `docs/acis/state`):
 | File | Purpose |
 |------|---------|
 | `STATE.md` | Global position, decisions, blockers |
@@ -81,9 +191,9 @@ Each agent receives context via **@-file injection**, not accumulation:
 ```
 Task(
   prompt="Fix goal...
-    Goal: @docs/reviews/goals/PR55-G3.json
-    State: @.acis/STATE.md
-    Progress: @.acis/progress/PR55-G3.json",
+    Goal: @${config.paths.goals}/PR55-G3.json
+    State: @${config.paths.state}/STATE.md
+    Progress: @${config.paths.state}/progress/PR55-G3.json",
   subagent_type="acis-fix-agent"
 )
 ```
@@ -203,14 +313,24 @@ Process Auditor (Loop 1 - Outermost):
 The remediation workflow is driven by a **thin orchestrator** (15% context budget) that spawns fresh agents:
 
 ```
-1. Read goal file: @{goal-file-path}
-2. Initialize state: .acis/STATE.md (or create if missing)
-3. Initialize progress: .acis/progress/{goal-id}.json
-4. Check enforcement flags: --force-codex, --force-ralph-loop
-5. Validate plugins available if enforced
+1. Load config: Read .acis-config.json
+2. VALIDATE PATHS: Run path validation (MUST pass - see "Path Validation" above)
+3. Check for nested paths: Run find_nested_acis_paths (warn if found)
+4. Read goal file: @{goal-file-path}
+5. Initialize state: ${config.paths.state}/STATE.md (or create if missing)
+6. Initialize progress: ${config.paths.state}/progress/{goal-id}.json
+7. Check enforcement flags: --force-codex, --force-ralph-loop
+8. Validate plugins available if enforced
 ```
 
-**State Initialization** (create `.acis/STATE.md` if not exists):
+**State Directory Setup** (create if not exists):
+```bash
+# Create state directory using SAFE path resolution
+state_dir="$(resolve_acis_path "${config.paths.state}" "")"
+mkdir -p "$state_dir/progress"
+```
+
+**State Initialization** (create `${config.paths.state}/STATE.md` if not exists):
 ```markdown
 # ACIS State
 
@@ -359,7 +479,12 @@ mcp__codex__codex(
 - Log: "Running in degraded mode - no external expert validation"
 - Continue with internal agents only
 
-**Output**: Write discovery results to `.acis/discovery/{goal-id}.md`:
+**Output**: Write discovery results to `${config.paths.state}/discovery/{goal-id}.md`:
+```bash
+# Use safe path resolution - NEVER hardcode paths
+discovery_file="$(resolve_acis_path "${config.paths.state}" "discovery/${goal_id}.md")"
+```
+Contents:
 - Synthesized findings from all perspectives
 - Enhanced `detection.verifiable_metrics`
 - Populated `behavioral.acceptance_scenarios`
@@ -398,7 +523,7 @@ ORCHESTRATOR (15% context max) LOOP:
 │   Task(
 │     prompt="Verify goal status.
 │       Goal: @{goal-file}
-│       Progress: @.acis/progress/{goal-id}.json
+│       Progress: @${config.paths.state}/progress/{goal-id}.json
 │       Run detection commands, report current values.",
 │     subagent_type="acis-verify-agent"
 │   )
@@ -417,9 +542,9 @@ ORCHESTRATOR (15% context max) LOOP:
 │   Task(
 │     prompt="Execute fix iteration {N}.
 │       Goal: @{goal-file}
-│       State: @.acis/STATE.md
-│       Progress: @.acis/progress/{goal-id}.json
-│       Discovery: @.acis/discovery/{goal-id}.md
+│       State: @${config.paths.state}/STATE.md
+│       Progress: @${config.paths.state}/progress/{goal-id}.json
+│       Discovery: @${config.paths.state}/discovery/{goal-id}.md
 │
 │       Previous iterations in Progress file.
 │       Apply fix based on Discovery recommendations.
@@ -428,9 +553,12 @@ ORCHESTRATOR (15% context max) LOOP:
 │   )
 │   → Returns: Iteration result
 │
-├── 5. UPDATE STATE FILES
-│   - Append iteration to .acis/progress/{goal-id}.json
-│   - Update .acis/STATE.md with position
+├── 5. UPDATE STATE FILES (use safe path resolution)
+│   # CRITICAL: Use resolve_acis_path() - NEVER hardcode paths
+│   progress_file="$(resolve_acis_path "${config.paths.state}" "progress/${goal_id}.json")"
+│   state_file="$(resolve_acis_path "${config.paths.state}" "STATE.md")"
+│   - Append iteration to $progress_file
+│   - Update $state_file with position
 │   - Commit changes if result == success
 │
 ├── 6. REPORT: Output iteration checkpoint
@@ -449,7 +577,7 @@ ORCHESTRATOR (15% context max) LOOP:
 ralph_loop(
   prompt="/acis remediate {goal-file} --internal-iteration",
   max_iterations=20,
-  completion_check="grep 'GOAL_.*_ACHIEVED' .acis/STATE.md"
+  completion_check="grep 'GOAL_.*_ACHIEVED' ${config.paths.state}/STATE.md"
 )
 ```
 
@@ -690,25 +818,38 @@ mcp__codex__codex(
 
 ## Example Usage
 
+Goal files are in `${config.paths.goals}` (default: `docs/acis/goals`):
+
 ```bash
 # Full pipeline (behavioral + consensus ON by default)
-/acis remediate docs/reviews/goals/WO63-CRIT-001-key-rotation.json
+# Path: ${config.paths.goals}/WO63-CRIT-001-key-rotation.json
+/acis remediate docs/acis/goals/WO63-CRIT-001-key-rotation.json
 
 # Skip behavioral TDD (for simple pattern replacements)
-/acis remediate docs/reviews/goals/WO63-MED-002-notifications.json --no-behavioral
+/acis remediate docs/acis/goals/WO63-MED-002-notifications.json --no-behavioral
 
 # Discovery only (no implementation)
-/acis remediate docs/reviews/goals/WO63-HIGH-001-layer-violations.json --discovery-only
+/acis remediate docs/acis/goals/WO63-HIGH-001-layer-violations.json --discovery-only
 
 # Internal agents only (no Codex)
-/acis remediate docs/reviews/goals/WO63-HIGH-002-voice-perf.json --skip-codex
+/acis remediate docs/acis/goals/WO63-HIGH-002-voice-perf.json --skip-codex
 
 # Run consensus verification on already-implemented goal
-/acis verify docs/reviews/goals/WO63-CRIT-001-key-rotation.json
+/acis verify docs/acis/goals/WO63-CRIT-001-key-rotation.json
 
 # Check status of all goals
 /acis status
 ```
+
+**Note**: If your project uses custom paths in `.acis-config.json`, adjust paths accordingly:
+```json
+{
+  "paths": {
+    "goals": "my/custom/goals/path"
+  }
+}
+```
+Then use: `/acis remediate my/custom/goals/path/GOAL-001.json`
 
 ## Multi-Perspective Discovery Agent Prompts
 
@@ -789,7 +930,7 @@ Launch ALL exploration agents **simultaneously** (single message, multiple Task/
 # Internal Agents (via Task tool) - Each gets 100% fresh context
 Task(
   prompt="Explore topic '{TOPIC}' from security/PHI perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Config: @.acis-config.json
     Focus: Surface existing PHI decisions, identify pending security decisions
     Output: Wired-in decisions, pending decisions, issues, opportunities",
@@ -798,7 +939,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from architecture perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Focus: Surface existing architecture decisions, identify design patterns
     Output: Wired-in decisions, pending decisions, dependencies, tradeoffs",
   subagent_type="tech-lead"
@@ -806,7 +947,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from testing perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Focus: Surface testing strategy decisions, coverage implications
     Output: Test approach decisions, coverage gaps, test scaffolds needed",
   subagent_type="test-lead"
@@ -814,7 +955,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from mobile/offline perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Focus: Platform decisions, offline strategy implications
     Output: Platform decisions, sync considerations, offline requirements",
   subagent_type="mobile-lead"
@@ -822,7 +963,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from end-user/persona perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Config: @.acis-config.json (for personas)
     Focus: UX decisions affecting Brenda/David/Dr.Evans
     Output: Persona impacts, UX decisions, journey implications",
@@ -831,7 +972,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from operations perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Focus: Operations decisions, deployment, monitoring
     Output: Operational decisions, cost implications, maintenance burden",
   subagent_type="devops-lead"
@@ -839,7 +980,7 @@ Task(
 
 Task(
   prompt="Explore topic '{TOPIC}' from crash-resilience perspective.
-    Scope: @.acis/discovery-scope.md
+    Scope: @${config.paths.state}/discovery-scope.md
     Focus: Failure handling decisions, recovery strategies
     Output: Resilience decisions, failure modes, recovery requirements",
   subagent_type="oracle"
@@ -950,12 +1091,40 @@ If CEO-Alpha.recommendation != CEO-Beta.recommendation:
 
 **Output**: Decision Manifest + Supporting Artifacts
 
+All paths MUST use `resolve_acis_path()` to prevent nested path bugs:
+
+```bash
+# CORRECT - Using safe path resolution
+manifest_file="$(resolve_acis_path "${config.paths.decisions}" "DISC-2026-01-19-${topic}.json")"
+report_file="$(resolve_acis_path "${config.paths.discovery}" "DISC-2026-01-19-${topic}.md")"
+goal_file="$(resolve_acis_path "${config.paths.goals}" "DISC-${severity}-${seq}-${slug}.json")"
 ```
-docs/manifests/DISC-2026-01-19-{topic}.json  <- Binding document
-docs/reports/DISC-2026-01-19-{topic}.md      <- Discovery report
-docs/specs/{topic}.md                         <- Feature spec (if feature)
-docs/reviews/goals/DISC-*.json               <- Goal files (if issues found)
-docs/architecture/decisions/ADR-XXX.md       <- ADR drafts (if architecture)
+
+**Artifact Locations** (using config paths):
+```
+${config.paths.decisions}/DISC-2026-01-19-{topic}.json  <- Binding document (decision manifest)
+${config.paths.discovery}/DISC-2026-01-19-{topic}.md    <- Discovery report
+${config.paths.goals}/DISC-{SEVERITY}-{SEQ}-{slug}.json <- Goal files (if issues found)
+docs/architecture/decisions/ADR-XXX.md                   <- ADR drafts (if architecture - outside ACIS)
+```
+
+**CRITICAL**: Before writing ANY file, validate the resolved path doesn't contain nested segments:
+```bash
+validate_no_nesting() {
+  local path="$1"
+  case "$path" in
+    *"docs/acis"*"docs/acis"*|*"docs/reviews"*"docs/reviews"*)
+      echo "ERROR: Nested path detected: $path" >&2
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+# Use BEFORE every file write
+if ! validate_no_nesting "$manifest_file"; then
+  exit 1
+fi
 ```
 
 ---
@@ -1024,15 +1193,17 @@ Your rationale will be captured in the manifest.
 
 ### Resolution Commands
 
+Decision manifests are in `${config.paths.decisions}` (default: `docs/acis/decisions`):
+
 ```bash
 # Resolve all decisions (auto + prompt for diverged)
-/acis resolve docs/manifests/DISC-2026-01-19-voice.json
+/acis resolve docs/acis/decisions/DISC-2026-01-19-voice.json
 
 # Only auto-resolve converged, skip diverged
-/acis resolve docs/manifests/DISC-2026-01-19-voice.json --auto-only
+/acis resolve docs/acis/decisions/DISC-2026-01-19-voice.json --auto-only
 
 # Force resolution of specific decision
-/acis resolve docs/manifests/DISC-2026-01-19-voice.json --force DEC-CACHE-001
+/acis resolve docs/acis/decisions/DISC-2026-01-19-voice.json --force DEC-CACHE-001
 ```
 
 ---
@@ -1137,6 +1308,8 @@ Every decision requires formal specification tests:
 
 ## Example Usage
 
+All ACIS artifacts are stored under `${config.paths.acisRoot}` (default: `docs/acis`):
+
 ```bash
 # Proactive feature discovery
 /acis discovery "offline voice commands for Brenda" --type feature
@@ -1154,13 +1327,30 @@ Every decision requires formal specification tests:
 /acis discovery "race conditions in SyncEngine" --type bug-hunt --scope packages/mobile/src/foundation
 
 # Resolve decisions after discovery
-/acis resolve docs/manifests/DISC-2026-01-19-offline-voice.json
+# Path: ${config.paths.decisions}/DISC-2026-01-19-offline-voice.json
+/acis resolve docs/acis/decisions/DISC-2026-01-19-offline-voice.json
 
 # Remediate with manifest binding
-/acis remediate docs/reviews/goals/VOICE-001.json --manifest docs/manifests/DISC-2026-01-19-offline-voice.json
+# Goal: ${config.paths.goals}/VOICE-001.json
+# Manifest: ${config.paths.decisions}/DISC-2026-01-19-offline-voice.json
+/acis remediate docs/acis/goals/VOICE-001.json --manifest docs/acis/decisions/DISC-2026-01-19-offline-voice.json
 
 # Check status of all manifests and goals
 /acis status
+```
+
+**Artifact Directory Structure** (with default paths):
+```
+docs/acis/                    # ${config.paths.acisRoot}
+├── goals/                    # ${config.paths.goals} - Goal JSON files
+├── discovery/                # ${config.paths.discovery} - Discovery reports
+├── decisions/                # ${config.paths.decisions} - Decision manifests
+├── audits/                   # ${config.paths.audits} - Audit reports
+├── skills/                   # ${config.paths.skills} - Generated skills
+└── state/                    # ${config.paths.state} - Runtime state
+    ├── STATE.md
+    ├── progress/
+    └── discovery/
 ```
 
 ---
