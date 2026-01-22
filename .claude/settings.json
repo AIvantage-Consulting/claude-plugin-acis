@@ -1,0 +1,17 @@
+{
+  "$schema": "https://code.claude.com/settings.schema.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/acis-path-validator.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
