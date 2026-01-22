@@ -297,3 +297,63 @@ Add to CI pipeline to catch nested paths:
     fi
     echo "No nested paths found"
 ```
+
+---
+
+## Runtime Hook Enforcement (ACTIVE)
+
+ACIS uses Claude Code PreToolUse hooks to BLOCK invalid paths **before** files are written.
+
+### Installation
+
+Hooks are installed automatically by `/acis init`, or manually:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-hooks.sh" "${PROJECT_ROOT}"
+```
+
+### Hook Location
+
+- **Validator Script**: `.claude/hooks/acis-path-validator.sh`
+- **Configuration**: `.claude/settings.json`
+
+### What Gets Blocked
+
+| Pattern | Detection | Action |
+|---------|-----------|--------|
+| `docs/acis/goals/docs/acis/goals/...` | Nested ACIS path | **BLOCKED (exit 2)** |
+| `docs/reviews/goals/docs/reviews/goals/...` | Nested reviews path | **BLOCKED (exit 2)** |
+| `.acis-config.json` with `/absolute/path` | Absolute path in config | **BLOCKED (exit 2)** |
+| `.acis-config.json` with `../traversal` | Path traversal in config | **BLOCKED (exit 2)** |
+| Goal file not in `docs/acis/goals/` | Non-standard location | **WARNING (allowed)** |
+
+### How It Works
+
+1. Claude Code intercepts Edit/Write tool calls
+2. Hook receives JSON input via stdin: `{"tool_input": {"file_path": "..."}}`
+3. Validator checks path against rules
+4. Exit code 0 = allow, Exit code 2 = block
+
+### Testing the Hook
+
+```bash
+# Should BLOCK (nested path)
+echo '{"tool_input":{"file_path":"docs/acis/goals/docs/acis/goals/test.json"}}' | \
+  bash .claude/hooks/acis-path-validator.sh
+
+# Should ALLOW (valid path)
+echo '{"tool_input":{"file_path":"docs/acis/goals/PR55-G1.json"}}' | \
+  bash .claude/hooks/acis-path-validator.sh
+```
+
+### Bypassing (NOT Recommended)
+
+If you need to bypass hooks temporarily:
+
+```bash
+# Remove hook from settings.json (manual edit)
+# Or rename the validator script
+mv .claude/hooks/acis-path-validator.sh .claude/hooks/acis-path-validator.sh.disabled
+```
+
+**Warning**: Bypassing hooks removes all path validation protection.

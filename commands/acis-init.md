@@ -65,6 +65,14 @@ User invokes `/acis init` command with optional flags:
     │  + Optional: docs/vision.md (if created)         │
     │  + Optional: docs/user-journeys.md               │
     └─────────────────────────────────────────────────┘
+                              │
+                              ▼
+    ┌─────────────────────────────────────────────────┐
+    │  STEP 7: Install Path Validation Hooks           │
+    │  - Copy acis-path-validator.sh to project        │
+    │  - Configure PreToolUse hook in settings.json    │
+    │  - BLOCKS nested paths, absolute paths, etc.     │
+    └─────────────────────────────────────────────────┘
 ```
 
 ## Step 0: Dependency Check (Pre-flight)
@@ -448,6 +456,64 @@ No plugins installed:
 "pluginDefaults": { "skipCodex": true, "skipRalphLoop": true, "useInternalAgentsOnly": true }
 ```
 
+## Step 7: Install Path Validation Hooks
+
+**CRITICAL**: Install runtime hooks that ENFORCE path validation rules.
+
+This step is NOT optional. Without hooks, path validation rules are just documentation.
+
+### 7.1 Run Installation Script
+
+Execute the hook installation script:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-hooks.sh" "${PROJECT_ROOT}"
+```
+
+This will:
+1. Create `${PROJECT_ROOT}/.claude/hooks/` directory
+2. Copy `acis-path-validator.sh` to project
+3. Create/update `${PROJECT_ROOT}/.claude/settings.json` with hook configuration
+
+### 7.2 Hook Behavior
+
+The installed hook intercepts Edit/Write operations BEFORE they execute:
+
+| Detection | Action | Exit Code |
+|-----------|--------|-----------|
+| Nested ACIS path (`docs/acis/goals/docs/acis/goals`) | **BLOCK** | 2 |
+| Absolute path in .acis-config.json | **BLOCK** | 2 |
+| Path traversal (`..`) in config | **BLOCK** | 2 |
+| ACIS artifact in non-standard location | **WARN** (allow) | 0 |
+
+### 7.3 Show Installation Summary
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  Path Validation Hooks Installed                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  Installed files:                                                 ║
+║    • .claude/hooks/acis-path-validator.sh                        ║
+║    • .claude/settings.json (updated)                             ║
+║                                                                   ║
+║  The hook will now:                                               ║
+║    ✗ BLOCK nested paths (docs/acis/goals/docs/acis/goals)        ║
+║    ✗ BLOCK absolute paths in .acis-config.json                   ║
+║    ✗ BLOCK path traversal (..) in config                         ║
+║    ⚠ WARN about artifacts in non-standard locations              ║
+║                                                                   ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+### 7.4 Hook Already Exists
+
+If hooks are already installed, the script detects this and skips:
+
+```
+ACIS hooks already installed.
+```
+
 ## Optional Outputs
 
 If user approves, also generate:
@@ -462,11 +528,14 @@ ACIS initialized successfully!
 Configuration: .acis-config.json
 Goals directory: docs/reviews/goals/
 Skills directory: skills/ (populated by Process Auditor)
+Path hooks: .claude/hooks/acis-path-validator.sh (ACTIVE)
 
 Next steps:
   /acis status    - View current status
   /acis discovery - Start feature discovery
   /acis extract   - Extract goals from PR review
+
+Note: Path validation hooks are now ACTIVE. Invalid paths will be BLOCKED.
 ```
 
 ## Error Handling
