@@ -15,11 +15,70 @@ A Claude Plugin for decision-oriented discovery, behavioral TDD remediation, and
 
 ## Installation
 
-```bash
-# Clone or copy to your plugins directory
-cp -r acis ~/AI_Products/aivantage/claude-plugins/
+### Option 1: Via Marketplace (Recommended)
 
-# The plugin will be auto-discovered by Claude Code
+**Add the marketplace:**
+```bash
+# From GitHub (when published)
+/plugin marketplace add aivantage-consulting/claude-plugin-acis
+
+# Or from local path (development)
+/plugin marketplace add /path/to/acis
+```
+
+**Install the plugin:**
+```bash
+/plugin install acis@aivantage-acis
+```
+
+### Option 2: Direct Plugin Installation
+
+**For development/testing:**
+```bash
+claude --plugin-dir /path/to/acis
+```
+
+**For permanent local installation:**
+```bash
+# Create symlink in Claude's plugin cache
+ln -s /path/to/acis ~/.claude/plugins/repos/acis
+```
+
+### Option 3: Project-Wide Configuration
+
+Add to your project's `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "aivantage-acis": {
+      "source": {
+        "source": "github",
+        "repo": "aivantage-consulting/claude-plugin-acis"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "acis@aivantage-acis": true
+  }
+}
+```
+
+### Option 4: System-Wide Configuration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "aivantage-acis": {
+      "source": "./repos/acis"
+    }
+  },
+  "enabledPlugins": {
+    "acis@aivantage-acis": true
+  }
+}
 ```
 
 ## Quick Start
@@ -147,19 +206,32 @@ Use POSIX constructs: `grep`, `find`, `sed`, `awk`, `[ ]` tests.
 
 ```
 acis/
-├── .claude-plugin/plugin.json     # Plugin manifest
+├── .claude-plugin/
+│   ├── plugin.json               # Plugin manifest
+│   └── marketplace.json          # Marketplace definition (for distribution)
 ├── commands/
-│   ├── acis.md                    # Main command
-│   ├── acis-init.md               # Project bootstrapping
-│   └── acis-audit.md              # Process Auditor
-├── schemas/                       # JSON schemas
-├── configs/                       # Perspectives, lenses
-├── templates/                     # Codex delegation templates
-├── interview/                     # Interview system
-├── audit/                         # Process Auditor system
-├── skill-templates/               # Templates for generated skills
-├── ralph-profiles/                # Ralph-loop execution profiles
-└── docs/                          # Architecture, user guide
+│   ├── acis.md                   # Main ACIS command reference
+│   ├── acis-init.md              # Project bootstrapping
+│   ├── acis-audit.md             # Process Auditor
+│   ├── help.md                   # Dynamic help system
+│   ├── status.md                 # Progress dashboard
+│   ├── extract.md                # PR goal extraction
+│   ├── discovery.md              # Multi-perspective investigation
+│   ├── resolve.md                # Decision resolution
+│   ├── remediate.md              # Full TDD pipeline
+│   └── verify.md                 # Consensus verification
+├── agents/                       # Specialized agents
+├── schemas/                      # JSON schemas
+├── configs/                      # Perspectives, lenses
+├── templates/                    # Codex delegation templates
+├── prompts/                      # LLM prompt templates
+├── interview/                    # Interview system
+├── audit/                        # Process Auditor system
+├── skill-templates/              # Templates for generated skills
+├── skills/                       # Dynamically generated skills
+├── ralph-profiles/               # Ralph-loop execution profiles
+├── examples/                     # Example configurations
+└── docs/                         # Architecture, user guide
 ```
 
 ## Requirements
