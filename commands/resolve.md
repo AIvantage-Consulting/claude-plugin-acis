@@ -203,6 +203,21 @@ mv "${manifest_file}.tmp" "$manifest_file"
     └──────────────────────────────┘
 ```
 
+## Estimation Rules (CRITICAL)
+
+**ACIS uses COMPLEXITY-based estimation, NEVER time-based estimation.**
+
+When discussing effort for decisions or implementation:
+
+### ❌ FORBIDDEN (Never Output)
+- `"8h"`, `"24h"`, `"40h → 56h"`
+- `"Total Effort: 40h"`
+- Any numeric time estimate
+
+### ✅ REQUIRED (Always Use)
+- **Complexity Tier**: Tier 1 (Simple), Tier 2 (Moderate), Tier 3 (Complex)
+- **What + Why**: Brief description of what's involved
+
 ## Examples
 
 ```bash

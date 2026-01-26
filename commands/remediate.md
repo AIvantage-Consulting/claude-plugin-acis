@@ -24,9 +24,13 @@ Phase 2: BEHAVIORAL TDD        Extract personas → Create acceptance scenarios
            ▼
 Phase 3: RALPH-LOOP           MEASURE → VERIFY → FIX → CHECK (repeat)
            │                   + Multi-perspective 5 Whys when stuck
+           │                   + Codex stuck consultation if 4+ iterations
            ▼
 Phase 4: CONSENSUS            Independent verification by multiple agents
            │                   All must APPROVE for goal achievement
+           ▼
+Phase 4.5: QUALITY-GATE       Codex reviews cumulative changes (SOLID+DRY)
+           │                   APPROVE or REQUEST_CHANGES
            ▼
        COMPLETE               Update goal status, generate report
 ```
@@ -125,6 +129,50 @@ mobile-lead       → APPROVE/REQUEST_CHANGES/REJECT
 - Any REJECT from security/architecture blocks completion
 - REQUEST_CHANGES requires another iteration
 
+### Phase 4.5: QUALITY-GATE (Codex Review)
+
+When goal metric is achieved (Phase 4 passes), delegate to Codex for code quality review before marking ACHIEVED.
+
+**Trigger**: Phase 4 returns `status === 'achieved'` AND NOT `--skip-quality-gate`
+
+**Template**: `${CLAUDE_PLUGIN_ROOT}/templates/codex-quality-gate.md`
+
+**Review Focus**:
+- SOLID principles (Single Responsibility, Open/Closed, Liskov, Interface Segregation, DI)
+- DRY principle (no duplication, constants for magic values)
+- Algorithm quality (correct approach, edge cases)
+- Architecture conformance (three-layer, dependency direction)
+- Healthcare/HIPAA considerations (PHI encryption, offline safety)
+
+**Output**:
+- `APPROVE` with quality score (1-5) → Mark goal ACHIEVED
+- `REQUEST_CHANGES` with issues → Loop back to Phase 3 FIX
+
+**Configuration**:
+- `--quality-threshold=N`: Minimum score to pass (default: 3)
+- `--skip-tier1-quality-gate`: Skip for Tier 1 (simple) goals
+- Max rejections: 2 (then escalate to user)
+
+### Stuck Consultation (Within Phase 3)
+
+When stuck for multiple iterations, optionally consult Codex for problem-solving guidance.
+
+**Trigger**:
+- Iteration >= stuck_threshold (default: 4)
+- Last 3 iterations all not_achieved or partial
+- NOT `--skip-codex`
+
+**Template**: `${CLAUDE_PLUGIN_ROOT}/templates/codex-stuck-consultation.md`
+
+**Purpose**: Problem-solving consultation (help mode), NOT code review
+
+**Output**: Alternative approach, implementation guidance, design pattern recommendation
+
+**Configuration**:
+- `--stuck-threshold=N`: Trigger after N iterations (default: 4)
+- `--force-consultation`: Force regardless of iteration count
+- Max consultations per goal: 2
+
 ## Flags
 
 | Flag | Description |
@@ -144,6 +192,11 @@ mobile-lead       → APPROVE/REQUEST_CHANGES/REJECT
 | `--deep-5whys` | Force multi-perspective 5 Whys for every fix |
 | `--fresh-agents` | Use fresh-agent-per-task pattern (default: ON) |
 | `--parallel-discovery` | Run discovery perspectives in parallel (default: ON) |
+| `--skip-quality-gate` | Skip Phase 4.5 quality gate (Codex review) |
+| `--quality-threshold=N` | Require quality score >= N to pass (default: 3) |
+| `--skip-tier1-quality-gate` | Skip quality gate for Tier 1 (simple) goals only |
+| `--stuck-threshold=N` | Trigger Codex consultation after N iterations (default: 4) |
+| `--force-consultation` | Force Codex consultation regardless of iteration count |
 
 ## Output Report
 

@@ -201,6 +201,39 @@ If CEO-Alpha.recommendation != CEO-Beta.recommendation:
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
+## Estimation Rules (CRITICAL)
+
+**ACIS uses COMPLEXITY-based estimation, NEVER time-based estimation.**
+
+When estimating effort for decisions, goals, or implementation work:
+
+### ❌ FORBIDDEN (Never Output)
+- `"8h"`, `"24h"`, `"40h → 56h"`
+- `"2 hours"`, `"3 days"`, `"1 week"`
+- `"Effort: 8 hours"`
+- `"Total Effort: 40h"`
+- Any numeric time estimate
+
+### ✅ REQUIRED (Always Use)
+- **Complexity Tier**: Tier 1 (Simple), Tier 2 (Moderate), Tier 3 (Complex)
+- **Effort Category**: Quick / Short / Medium / Large
+- **What + Why**: Brief description of what's involved and why it's that complexity
+
+### Complexity Tier Definitions
+
+| Tier | Category | What It Means |
+|------|----------|---------------|
+| **1** | Quick/Short | Single file, pattern replacement, clear fix |
+| **2** | Medium | Multi-file, requires understanding, some decisions |
+| **3** | Large | Architecture impact, multiple components, significant decisions |
+
+### Example Output
+```
+DEC-SYNC-002: Conflict Resolution Strategy
+  Complexity: Tier 2 (Medium) - Multi-file change across sync layer,
+              requires CRDT library integration and conflict UI
+```
+
 ## Examples
 
 ```bash

@@ -1,8 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "profile": "behavioral-tdd",
-  "description": "Loop 3 (Innermost): Surgical problem-solving with behavioral TDD using fresh agents",
-  "purpose": "Targeted remediation of individual goals using RED → GREEN → VERIFY cycle with fresh context per iteration",
+  "version": "2.2.0",
+  "description": "Loop 3 (Innermost): Surgical problem-solving with behavioral TDD using fresh agents, quality gates, and stuck consultation",
+  "purpose": "Targeted remediation of individual goals using RED → GREEN → VERIFY → QUALITY GATE cycle with fresh context per iteration",
 
   "trigger": {
     "type": "command",
@@ -15,9 +16,9 @@
     "pattern": "fresh-agent-per-task",
     "orchestrator_budget": "15%",
     "state_files": {
-      "global_state": ".acis/STATE.md",
-      "progress": ".acis/progress/{goal-id}.json",
-      "discovery": ".acis/discovery/{goal-id}.md"
+      "global_state": "${config.paths.state}/STATE.md",
+      "progress": "${config.paths.state}/progress/{goal-id}.json",
+      "discovery": "${config.paths.state}/discovery/{goal-id}.md"
     },
     "context_injection": "Use @-file references in prompts, never accumulate context"
   },
@@ -33,7 +34,7 @@
         "spawn_pattern": "Task(prompt='Verify goal...', subagent_type='acis-verify-agent')",
         "context_injection": [
           "@{goal-file}",
-          "@.acis/progress/{goal-id}.json"
+          "@${config.paths.state}/progress/{goal-id}.json"
         ]
       },
       "actions": [
@@ -58,19 +59,19 @@
         "spawn_pattern": "Multiple Task calls in single message (parallel)",
         "agents": [
           { "type": "security-privacy", "lens": "PHI/HIPAA compliance" },
-          { "type": "tech-lead", "lens": "Architecture/design" },
+          { "type": "tech-lead", "lens": "Architecture/design (SOLID+DRY)" },
           { "type": "oracle", "lens": "Crash-resilience" }
         ],
         "context_injection": [
           "@{goal-file}",
-          "@.acis/STATE.md",
-          "@.acis/progress/{goal-id}.json"
+          "@${config.paths.state}/STATE.md",
+          "@${config.paths.state}/progress/{goal-id}.json"
         ]
       },
       "actions": [
         "ORCHESTRATOR: Spawn 3 agents in SINGLE message (parallel)",
         "AGENT-1 (security): 5 Whys from security perspective",
-        "AGENT-2 (tech-lead): 5 Whys from architecture perspective",
+        "AGENT-2 (tech-lead): 5 Whys from architecture perspective (SOLID+DRY focus)",
         "AGENT-3 (oracle): 5 Whys from crash-resilience perspective",
         "ORCHESTRATOR: Collect all WHY-5 root causes",
         "ORCHESTRATOR: Synthesize convergence (CONVERGED/PARTIAL/DIVERGED)",
@@ -79,6 +80,47 @@
       "outputs": ["rootCause", "fixPlan", "convergenceStatus"],
       "min_depth": 5,
       "timeout_minutes": 10
+    },
+    {
+      "name": "STUCK-CONSULTATION",
+      "order": 2.5,
+      "description": "Codex consultation when stuck for multiple iterations (problem-solving, not review)",
+      "condition": {
+        "trigger_if": [
+          "iteration_count >= stuck_threshold (default: 4)",
+          "last 3 iterations all resulted in not_achieved or partial",
+          "NOT flags.includes('--skip-codex')"
+        ],
+        "skip_if": [
+          "flags.includes('--skip-codex')",
+          "iteration_count < stuck_threshold",
+          "recent_progress_made"
+        ]
+      },
+      "agent": {
+        "type": "codex",
+        "mode": "Advisory",
+        "sandbox": "read-only",
+        "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-stuck-consultation.md"
+      },
+      "actions": [
+        "ORCHESTRATOR: Check stuck condition (iterations >= threshold, no progress)",
+        "ORCHESTRATOR: Compile iteration history summary",
+        "ORCHESTRATOR: Extract 5-WHYS synthesis from all perspectives",
+        "ORCHESTRATOR: Delegate to Codex with consultation template",
+        "CODEX: Analyze what internal analysis missed",
+        "CODEX: Provide alternative approach + implementation guidance",
+        "CODEX: Suggest design pattern (SOLID-aligned)",
+        "ORCHESTRATOR: Inject guidance into next FIX iteration",
+        "ORCHESTRATOR: Record consultation in progress file"
+      ],
+      "outputs": ["diagnosis", "recommendedApproach", "implementationGuidance", "designPattern"],
+      "config": {
+        "stuck_threshold": 4,
+        "flag_override": "--stuck-threshold=N",
+        "max_consultations_per_goal": 2
+      },
+      "timeout_minutes": 3
     },
     {
       "name": "FIX",
@@ -90,15 +132,17 @@
         "spawn_pattern": "Task(prompt='Execute fix...', subagent_type='acis-fix-agent')",
         "context_injection": [
           "@{goal-file}",
-          "@.acis/STATE.md",
-          "@.acis/progress/{goal-id}.json",
-          "@.acis/discovery/{goal-id}.md"
+          "@${config.paths.state}/STATE.md",
+          "@${config.paths.state}/progress/{goal-id}.json",
+          "@${config.paths.state}/discovery/{goal-id}.md"
         ]
       },
       "actions": [
         "ORCHESTRATOR: Spawn fresh acis-fix-agent with full context injection",
         "AGENT: Read previous iterations from progress file",
+        "AGENT: If stuck consultation occurred, apply recommended approach",
         "AGENT: Apply fix plan from 5 Whys analysis",
+        "AGENT: Ensure SOLID+DRY compliance",
         "AGENT: Minimal diff only - no unrelated changes",
         "AGENT: Update tests if required",
         "AGENT: Return {result, filesModified, notes}",
@@ -110,7 +154,9 @@
         "no_any_unless_existing",
         "no_test_deletion",
         "no_scope_reduction",
-        "minimal_diff"
+        "minimal_diff",
+        "solid_compliance",
+        "dry_compliance"
       ],
       "outputs": ["codeChanges", "testUpdates", "iterationResult"],
       "timeout_minutes": 20
@@ -125,7 +171,7 @@
         "spawn_pattern": "Task(prompt='Verify goal...', subagent_type='acis-verify-agent')",
         "context_injection": [
           "@{goal-file}",
-          "@.acis/progress/{goal-id}.json"
+          "@${config.paths.state}/progress/{goal-id}.json"
         ]
       },
       "actions": [
@@ -134,18 +180,84 @@
         "AGENT: Compare new value to target",
         "AGENT: Run related tests for regression check",
         "AGENT: Return {status, verificationResult}",
-        "ORCHESTRATOR: If achieved → go to Phase 4 (Consensus)",
-        "ORCHESTRATOR: If not achieved → loop back to MEASURE",
+        "ORCHESTRATOR: If achieved → proceed to QUALITY-GATE (Phase 4.5)",
+        "ORCHESTRATOR: If not achieved → check stuck condition, then loop to MEASURE",
         "ORCHESTRATOR: Update goal status and progress file"
       ],
       "outputs": ["verificationResult", "goalStatus"],
       "timeout_minutes": 5
+    },
+    {
+      "name": "QUALITY-GATE",
+      "order": 4.5,
+      "description": "Codex quality review of cumulative changes before marking goal ACHIEVED",
+      "condition": {
+        "trigger_if": [
+          "Phase 4 (VERIFY) returned status === 'achieved'",
+          "NOT flags.includes('--skip-quality-gate')",
+          "NOT flags.includes('--skip-codex')"
+        ],
+        "skip_if": [
+          "flags.includes('--skip-quality-gate')",
+          "flags.includes('--skip-codex')",
+          "goal.tier === 1 AND flags.includes('--skip-tier1-quality-gate')"
+        ]
+      },
+      "agent": {
+        "type": "codex",
+        "mode": "Advisory",
+        "sandbox": "read-only",
+        "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-quality-gate.md"
+      },
+      "actions": [
+        "ORCHESTRATOR: Generate cumulative diff (all iterations squashed)",
+        "ORCHESTRATOR: Compile file change summary",
+        "ORCHESTRATOR: Delegate to Codex with quality-gate template",
+        "CODEX: Review against SOLID principles",
+        "CODEX: Review against DRY principle",
+        "CODEX: Assess algorithm quality",
+        "CODEX: Check architecture conformance (three-layer)",
+        "CODEX: Verify healthcare/HIPAA considerations",
+        "CODEX: Return APPROVE or REQUEST_CHANGES with quality score",
+        "ORCHESTRATOR: If APPROVE → mark goal ACHIEVED",
+        "ORCHESTRATOR: If REQUEST_CHANGES → inject feedback, loop to FIX",
+        "ORCHESTRATOR: Record quality gate result in progress file"
+      ],
+      "review_focus": {
+        "solid_principles": {
+          "single_responsibility": "Each unit has one reason to change",
+          "open_closed": "Open for extension, closed for modification",
+          "liskov_substitution": "Subtypes behave as expected",
+          "interface_segregation": "Minimal, focused interfaces",
+          "dependency_inversion": "Depend on abstractions"
+        },
+        "dry_principle": "No duplicated logic, use constants for magic values",
+        "architecture": {
+          "layers": ["Foundation", "Journey", "Composition"],
+          "direction": "Lower layers never import from higher",
+          "healthcare": {
+            "phi_handling": "All PHI encrypted at rest and in transit",
+            "hipaa_compliance": "Audit trails, access controls",
+            "offline_safety": "Works without network, sync conflict handling"
+          }
+        }
+      },
+      "outputs": ["verdict", "qualityScore", "issues", "feedback"],
+      "config": {
+        "quality_threshold": 3,
+        "flag_override": "--quality-threshold=N",
+        "max_quality_gate_iterations": 2
+      },
+      "timeout_minutes": 3
     }
   ],
 
   "iteration_control": {
     "max_iterations": 10,
+    "stuck_threshold": 4,
+    "max_quality_gate_rejections": 2,
     "on_max_reached": "escalate_to_loop_2",
+    "on_quality_gate_max_rejections": "escalate_to_user",
     "escalation_message": "Goal {goal_id} not achieved after {max_iterations} iterations. May need new discovery."
   },
 
@@ -155,11 +267,16 @@
       "tests_pass",
       "no_regressions",
       "progress_documented"
-    ]
+    ],
+    "quality_gate": {
+      "required": true,
+      "minimum_score": 3,
+      "verdict": "APPROVE"
+    }
   },
 
   "tdd_cycle": {
-    "pattern": "RED → GREEN → VERIFY",
+    "pattern": "RED → GREEN → VERIFY → QUALITY GATE",
     "red": {
       "description": "Detection command shows issue exists",
       "commit_tag": "[RED]"
@@ -171,14 +288,28 @@
     "verify": {
       "description": "Confirm fix with detection command and tests",
       "commit_tag": "[VERIFY]"
+    },
+    "quality_gate": {
+      "description": "External code quality review before declaring victory",
+      "commit_tag": "[QUALITY-GATE]"
     }
   },
 
   "escalation": {
+    "stuck_consultation": {
+      "condition": "iteration >= stuck_threshold AND no_progress",
+      "action": "delegate_to_codex_for_consultation",
+      "max_consultations": 2
+    },
     "to_loop_2": {
-      "condition": "max_iterations_exceeded",
+      "condition": "max_iterations_exceeded OR max_consultations_exhausted",
       "action": "request_new_discovery",
       "message": "Cannot achieve goal with current approach. Requesting re-analysis."
+    },
+    "quality_gate_failures": {
+      "condition": "quality_gate_rejected >= max_quality_gate_rejections",
+      "action": "escalate_to_user",
+      "message": "Code quality not meeting standards after {count} quality gate attempts. Human review required."
     },
     "to_user": {
       "condition": "blocked_by_external_dependency",
@@ -188,8 +319,8 @@
 
   "integration": {
     "triggered_by_loop_2": true,
-    "reports_to_loop_1": ["iteration_count", "fix_type", "success_status"],
-    "reports_to_loop_2": ["achievement_status", "blockers"]
+    "reports_to_loop_1": ["iteration_count", "fix_type", "success_status", "quality_score", "consultation_count"],
+    "reports_to_loop_2": ["achievement_status", "blockers", "quality_gate_verdict"]
   },
 
   "safety_rules": {
@@ -205,7 +336,40 @@
       "5 Whys before fixing",
       "Minimal diff",
       "Test preservation",
-      "Progress documentation"
+      "Progress documentation",
+      "SOLID compliance",
+      "DRY compliance"
     ]
+  },
+
+  "codex_integration": {
+    "stuck_consultation": {
+      "purpose": "Problem-solving when stuck (help mode)",
+      "trigger": "iteration >= stuck_threshold AND no_progress",
+      "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-stuck-consultation.md",
+      "max_per_goal": 2
+    },
+    "quality_gate": {
+      "purpose": "Quality review when metric achieved (review mode)",
+      "trigger": "metric_achieved AND NOT skip_flags",
+      "template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-quality-gate.md",
+      "max_rejections": 2
+    }
+  },
+
+  "flags": {
+    "quality_gate": {
+      "--skip-quality-gate": "Skip Phase 4.5 quality gate entirely",
+      "--quality-threshold=N": "Require quality score >= N to pass (default: 3)",
+      "--skip-tier1-quality-gate": "Skip quality gate for Tier 1 (simple) goals only"
+    },
+    "stuck_consultation": {
+      "--stuck-threshold=N": "Trigger consultation after N iterations (default: 4)",
+      "--force-consultation": "Force consultation regardless of iteration count"
+    },
+    "codex": {
+      "--skip-codex": "Skip all Codex delegations (quality gate + consultation)",
+      "--force-codex": "Require Codex - error if unavailable"
+    }
   }
 }

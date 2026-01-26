@@ -1,6 +1,6 @@
-# ACIS v2.1 - Automated Code Improvement System
+# ACIS v2.2.0 - Automated Code Improvement System
 
-You are executing the Automated Code Improvement System (ACIS) v2.1 workflow with:
+You are executing the Automated Code Improvement System (ACIS) v2.2.0 workflow with:
 - **Decision-oriented discovery** (surface macro/micro decisions before implementation)
 - **Dual-CEO validation** (independent recommendations from AI-Native + Modern SWE perspectives)
 - **Multi-perspective discovery** (10+ agents in parallel)
@@ -280,6 +280,11 @@ Process Auditor (Loop 1 - Outermost):
 | `--deep-5whys` | Force multi-perspective 5 Whys for every fix (slower, more thorough) |
 | `--fresh-agents` | Use fresh-agent-per-task pattern (default: ON) |
 | `--parallel-discovery` | Run all discovery perspectives in parallel (default: ON) |
+| `--skip-quality-gate` | Skip Phase 4.5 quality gate (Codex review of changes) |
+| `--quality-threshold=N` | Require quality score >= N to pass quality gate (default: 3) |
+| `--skip-tier1-quality-gate` | Skip quality gate for Tier 1 (simple) goals only |
+| `--stuck-threshold=N` | Trigger stuck consultation after N iterations (default: 4) |
+| `--force-consultation` | Force Codex stuck consultation regardless of iteration count |
 
 **Enforcement Flags** (`--force-*`):
 - `--force-codex`: Requires Codex MCP to be available. Errors immediately if not configured. Use this when external expert validation is critical (security-sensitive goals, architectural changes).
@@ -691,6 +696,78 @@ After Multi-Perspective 5 Whys completes:
 2. Each fix must address the synthesized root cause
 3. Side effects are monitored in subsequent iterations
 
+### Phase 3.6: STUCK CONSULTATION (Conditional Codex Escalation)
+
+When the inner loop struggles for multiple iterations without progress, optionally escalate to Codex for problem-solving consultation (NOT review - this is help mode).
+
+**Triggers** (when ANY apply):
+1. **Iteration threshold**: Iteration >= stuck_threshold (default: 4)
+2. **No progress**: Last 3 iterations all resulted in not_achieved or partial
+3. **Manual**: `--force-consultation` flag
+
+**Skip If**:
+- `--skip-codex` flag is set
+- `--skip-quality-gate` flag is set (implies no Codex)
+- Iteration count < stuck_threshold
+- Recent progress was made
+
+**Purpose**: Problem-solving assistance, NOT code review. The goal is to unblock, not judge.
+
+**Codex Consultation Template**: `${CLAUDE_PLUGIN_ROOT}/templates/codex-stuck-consultation.md`
+
+**Consultation Prompt**:
+```
+TASK: Consultation to unblock goal {GOAL_ID} stuck after {ITERATION_COUNT} iterations
+
+EXPECTED OUTCOME: Fresh perspective on root cause + concrete solution approach
+
+MODE: Advisory (consultation, not implementation)
+
+## Goal Context
+- Goal ID, Summary, Severity
+- Detection command and current vs target values
+
+## What We've Tried
+- Iteration history (table format)
+- Internal 5-WHYS synthesis from all perspectives
+- Convergence status
+
+## Consultation Questions
+1. Root Cause Diagnosis: What are we missing?
+2. Alternative Approach: What different strategy would you suggest?
+3. Design Pattern: Is there a SOLID-aligned pattern that fits better?
+4. Architectural Consideration: Should the solution be at a different layer?
+5. Healthcare/Offline Constraint: Are we properly accounting for constraints?
+```
+
+**Output**:
+```json
+{
+  "diagnosis": "What 5-WHYS analysis missed",
+  "recommendedApproach": "Strategy with rationale",
+  "implementationGuidance": ["Step 1", "Step 2", "Step 3"],
+  "designPattern": "Pattern name + application",
+  "confidence": "high|medium|low"
+}
+```
+
+**Integration Flow**:
+```
+Iteration 1-3: Internal 5-WHYS + FIX
+                    ↓ (not achieved)
+Iteration 4: Stuck Consultation triggered
+                    ↓ (Codex provides guidance)
+Iteration 5-6: FIX with Codex guidance
+                    ↓ (still not achieved)
+Iteration 7: Second consultation OR escalate to Loop 2 (re-discovery)
+```
+
+**Configuration**:
+| Setting | Default | Override |
+|---------|---------|----------|
+| stuck_threshold | 4 | `--stuck-threshold=N` |
+| max_consultations_per_goal | 2 | N/A |
+
 **Iteration Report Format**:
 ```markdown
 ## Iteration {N}: {GOAL_ID}
@@ -788,6 +865,103 @@ mcp__codex__codex(
 **Result**: 4/4 APPROVE → GOAL ACHIEVED
 ```
 
+### Phase 4.5: QUALITY-GATE (Codex Code Review)
+
+**Purpose**: Before marking a goal ACHIEVED, delegate to Codex for quality review of cumulative changes. This catches code quality issues at the goal level (not per-commit).
+
+**Triggers** (when ALL apply):
+1. Phase 4 (VERIFY/CONSENSUS) returned status === 'achieved'
+2. NOT `--skip-quality-gate` flag
+3. NOT `--skip-codex` flag
+
+**Skip If**:
+- `--skip-quality-gate` flag is set
+- `--skip-codex` flag is set
+- For Tier 1 goals: `--skip-tier1-quality-gate` flag
+
+**Key Distinction** from Stuck Consultation:
+| Quality Gate (Phase 4.5) | Stuck Consultation (Phase 3.6) |
+|--------------------------|--------------------------------|
+| After metric achieved | When metric NOT achieved |
+| Reviews completed work | Helps solve problem |
+| Quality assessment | Problem-solving assistance |
+| APPROVE/REQUEST_CHANGES | Suggested approach + code |
+
+**Codex Quality Gate Template**: `${CLAUDE_PLUGIN_ROOT}/templates/codex-quality-gate.md`
+
+**Review Focus** (SOLID+DRY):
+```
+1. SOLID Principles
+   - Single Responsibility: Each unit has one reason to change
+   - Open/Closed: Open for extension, closed for modification
+   - Liskov Substitution: Subtypes behave as expected
+   - Interface Segregation: Minimal, focused interfaces
+   - Dependency Inversion: Depend on abstractions
+
+2. DRY Principle
+   - No duplicated logic
+   - Use constants for magic values
+
+3. Algorithm Quality
+   - Correct algorithmic approach
+   - No unnecessary O(n²) when O(n) is possible
+   - Edge cases handled
+
+4. Architecture Conformance
+   - Three-layer boundaries respected (Foundation → Journey → Composition)
+   - Lower layers never import from higher
+
+5. Healthcare/Security Considerations
+   - PHI encrypted at rest and in transit
+   - HIPAA compliance (audit trails, access controls)
+   - Offline safety (works without network, sync conflict handling)
+```
+
+**Quality Score** (1-5):
+| Score | Meaning |
+|-------|---------|
+| 5 | Exemplary - could be reference implementation |
+| 4 | Good - minor improvements possible but not blocking |
+| 3 | Acceptable - achieves goal but has notable issues |
+| 2 | Needs Work - significant issues that should be addressed |
+| 1 | Reject - fundamental problems requiring rework |
+
+**Output Format**:
+```json
+{
+  "verdict": "APPROVE | REQUEST_CHANGES",
+  "qualityScore": 3,
+  "issues": [
+    {"severity": "BLOCKING", "description": "...", "suggestion": "..."},
+    {"severity": "IMPORTANT", "description": "...", "suggestion": "..."}
+  ],
+  "feedback": "Rationale for verdict"
+}
+```
+
+**Flow**:
+```
+Phase 4: VERIFY → achieved
+           ↓
+Phase 4.5: QUALITY-GATE
+           ↓
+    ┌──────┴──────┐
+    ↓             ↓
+APPROVE    REQUEST_CHANGES
+    ↓             ↓
+Mark ACHIEVED   Loop back to FIX (Phase 3)
+                with quality feedback
+```
+
+**Configuration**:
+| Setting | Default | Override |
+|---------|---------|----------|
+| quality_threshold | 3 | `--quality-threshold=N` |
+| max_quality_gate_rejections | 2 | N/A |
+
+**Escalation**: If quality gate rejects 2+ times, escalate to user with message:
+> "Code quality not meeting standards after {count} quality gate attempts. Human review required."
+
 ## Completion Promises
 
 | Promise | Meaning |
@@ -807,6 +981,49 @@ mcp__codex__codex(
 6. **Independent verification** - Each agent runs metrics independently
 7. **Veto respected** - Security/Architecture vetoes block completion
 8. **Root cause synthesis** - Fixes must address synthesized root cause, not symptoms
+9. **NO TIME ESTIMATES** - Never output time-based estimates (hours, days, weeks). Use complexity tiers instead
+
+## Estimation Rules (CRITICAL)
+
+**ACIS uses COMPLEXITY-based estimation, NEVER time-based estimation.**
+
+### Forbidden Output Patterns
+- ❌ "8h", "24h", "40h → 56h"
+- ❌ "2 hours", "3 days", "1 week"
+- ❌ "Effort: 8 hours"
+- ❌ "Total WO-64 Effort: 40h"
+- ❌ Any numeric time estimate
+
+### Required Output Patterns
+- ✅ **Complexity Tier**: Tier 1 (Simple), Tier 2 (Moderate), Tier 3 (Complex)
+- ✅ **Effort Category**: Quick / Short / Medium / Large
+- ✅ **What + Why**: Brief description of what's involved and why it's that complexity
+
+### Complexity Tier Definitions
+| Tier | Category | What | Example |
+|------|----------|------|---------|
+| **1** | Quick/Short | Single file, pattern replacement, clear fix | Replace `Math.random()` with `crypto.getRandomValues()` |
+| **2** | Medium | Multi-file, requires understanding, some decisions | Add encryption to offline storage layer |
+| **3** | Large | Architecture impact, multiple components, significant decisions | Implement native platform ASR integration |
+
+### Example Output
+```
+G5 expanded from "Voice Stub Services" (Tier 1) to:
+"Native Platform ASR Integration" (Tier 3)
+
+Why Tier 3:
+- Requires platform-specific implementations (iOS + Android)
+- New service abstractions needed
+- Integration with existing voice pipeline
+```
+
+**NOT**:
+```
+G5 expanded from "Voice Stub Services" (8h) to:
+"Native Platform ASR Integration" (24h)
+
+Total WO-64 Effort: 40h → 56h
+```
 
 ## Schema References
 

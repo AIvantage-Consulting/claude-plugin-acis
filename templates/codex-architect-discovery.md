@@ -28,12 +28,13 @@ MUST DO:
 - Analyze tradeoffs of different implementation approaches
 - Recommend optimal design considering maintainability
 - Identify refactoring opportunities exposed by this goal
-- Provide effort estimate (Quick/Short/Medium/Large)
+- Provide complexity estimate: Tier 1 (Quick), Tier 2 (Medium), Tier 3 (Large) with brief "what + why"
 
 MUST NOT DO:
 - Over-engineer for hypothetical future needs
 - Introduce unnecessary abstractions
 - Ignore existing patterns in the codebase
+- **NEVER provide time-based estimates** (no hours, days, weeks - only complexity tiers)
 
 OUTPUT FORMAT:
 ## Bottom Line
@@ -48,12 +49,14 @@ OUTPUT FORMAT:
 1. **Option A**: [description]
    - Pros: [...]
    - Cons: [...]
-   - Effort: [Quick/Short/Medium/Large]
+   - Complexity: [Tier 1/2/3] - [brief why: what's involved]
 
 2. **Option B**: [description]
    - Pros: [...]
    - Cons: [...]
-   - Effort: [...]
+   - Complexity: [Tier 1/2/3] - [brief why]
+
+NOTE: NEVER use time estimates (hours/days). Use complexity tiers only.
 
 ## Recommendation
 [Selected approach with justification]
