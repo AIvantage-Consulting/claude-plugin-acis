@@ -1,0 +1,161 @@
+{
+  "$schema": "../schemas/known-resolutions.schema.json",
+  "schema_version": "1.0",
+  "description": "Intentional exceptions and design decisions that should not be re-flagged by /acis:extract. This file tracks items that are NOT bugs to fix, but deliberate choices.",
+  "usage_notes": {
+    "when_to_add": [
+      "Pattern is intentional by design (e.g., DEBUG console.log behind flag)",
+      "Issue is mitigated by other controls (e.g., validation elsewhere)",
+      "False positive from detection pattern",
+      "Deferred to future work order with documented rationale",
+      "Accepted risk with stakeholder sign-off"
+    ],
+    "when_NOT_to_add": [
+      "Goal was fixed - use goal file with 'achieved' status instead",
+      "Temporary workaround - create a goal to track proper fix",
+      "Unsure if it's a real issue - investigate first"
+    ],
+    "re_verification": {
+      "description": "Resolutions are NOT permanent. They expire and get re-checked.",
+      "triggers": [
+        "File modified since resolution → mandatory re-check",
+        "TTL expired (14-60 days based on confidence) → spot-check",
+        "Random 10% sampling on each extract → spot-check"
+      ]
+    }
+  },
+  "resolutions": [
+    {
+      "id": "KR-001",
+      "resolution_type": "by_design",
+      "pattern": {
+        "type": "regex",
+        "value": "console\\.log",
+        "file_paths": ["src/service-worker.js"],
+        "lens": "maintainability"
+      },
+      "rationale": "Service worker console.log statements are wrapped in DEBUG flag and only execute in development builds. Production builds strip these via build process.",
+      "mitigations": [
+        "DEBUG flag check wraps all console.log calls",
+        "Production build process removes debug code",
+        "Build verification test confirms no console.log in production bundle"
+      ],
+      "verification": {
+        "method": "code_review",
+        "verified_by": "tech-lead",
+        "verified_at": "2026-01-15T10:00:00Z",
+        "git_commit_hash": "abc123def",
+        "evidence": "PR #142 review comment, ADR-007"
+      },
+      "confidence": "high",
+      "ttl": {
+        "days": 60,
+        "recheck_after": "2026-03-16T10:00:00Z",
+        "recheck_on_file_change": true
+      },
+      "scope": {
+        "applies_to": "specific_files",
+        "file_paths": ["src/service-worker.js"],
+        "context_conditions": ["Only applies when wrapped in if(DEBUG)"]
+      },
+      "spot_check_history": [],
+      "related": {
+        "goal_ids": [],
+        "adr_id": "ADR-007",
+        "pr_numbers": [142]
+      },
+      "metadata": {
+        "created_at": "2026-01-15T10:00:00Z",
+        "created_by": "tech-lead",
+        "updated_at": "2026-01-15T10:00:00Z",
+        "tags": ["debug", "service-worker", "build-time-removal"]
+      }
+    },
+    {
+      "id": "KR-002",
+      "resolution_type": "mitigated",
+      "pattern": {
+        "type": "literal",
+        "value": "metadata.status",
+        "file_paths": ["src/storage/IndexedDBAdapter.ts"],
+        "lens": "architecture"
+      },
+      "rationale": "Denormalized status field in IndexedDB for offline-first performance. Consistency maintained via sync reconciliation on reconnect.",
+      "mitigations": [
+        "Sync reconciliation process validates status on reconnect",
+        "Conflict resolution favors server state for status field",
+        "Audit log tracks all status changes for debugging"
+      ],
+      "verification": {
+        "method": "architecture_decision",
+        "verified_by": "architect",
+        "verified_at": "2026-01-10T14:30:00Z",
+        "git_commit_hash": "def456ghi",
+        "evidence": "ADR-003: Offline-First Data Strategy"
+      },
+      "confidence": "high",
+      "ttl": {
+        "days": 60,
+        "recheck_after": "2026-03-11T14:30:00Z",
+        "recheck_on_file_change": true
+      },
+      "scope": {
+        "applies_to": "specific_files",
+        "file_paths": ["src/storage/IndexedDBAdapter.ts"]
+      },
+      "spot_check_history": [],
+      "related": {
+        "adr_id": "ADR-003"
+      },
+      "metadata": {
+        "created_at": "2026-01-10T14:30:00Z",
+        "created_by": "architect",
+        "tags": ["offline-first", "denormalization", "indexeddb"]
+      }
+    },
+    {
+      "id": "KR-003",
+      "resolution_type": "mitigated",
+      "pattern": {
+        "type": "semantic",
+        "value": "offline grace period for token validation",
+        "file_paths": ["src/auth/OfflineTokenValidator.ts"],
+        "lens": "security"
+      },
+      "rationale": "Offline grace period allows 24-hour cached token validity for healthcare workers in areas with poor connectivity. Risk accepted with compensating controls.",
+      "mitigations": [
+        "Revocation check queued and executed on reconnect",
+        "Grace period limited to 24 hours maximum",
+        "High-risk operations (PHI export, admin actions) require online validation",
+        "Audit trail records all offline-authenticated actions"
+      ],
+      "verification": {
+        "method": "risk_acceptance",
+        "verified_by": "security-lead",
+        "verified_at": "2026-01-12T09:00:00Z",
+        "git_commit_hash": "ghi789jkl",
+        "evidence": "Security review SR-2026-001, signed off by CISO"
+      },
+      "confidence": "medium",
+      "ttl": {
+        "days": 30,
+        "recheck_after": "2026-02-11T09:00:00Z",
+        "recheck_on_file_change": true
+      },
+      "scope": {
+        "applies_to": "specific_files",
+        "file_paths": ["src/auth/OfflineTokenValidator.ts"]
+      },
+      "spot_check_history": [],
+      "related": {
+        "goal_ids": ["WO61-SEC-003-token-revocation"],
+        "pr_numbers": [98, 112]
+      },
+      "metadata": {
+        "created_at": "2026-01-12T09:00:00Z",
+        "created_by": "security-lead",
+        "tags": ["security", "offline", "token", "grace-period", "risk-accepted"]
+      }
+    }
+  ]
+}

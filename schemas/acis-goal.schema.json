@@ -343,7 +343,7 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "achieved", "blocked", "deferred"]
+          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "achieved", "blocked", "deferred", "verified_acceptable"]
         },
         "current_phase": {
           "type": "string",
@@ -375,6 +375,76 @@
                 "type": "array",
                 "items": { "type": "string" }
               }
+            }
+          }
+        }
+      }
+    },
+    "achievement_verification": {
+      "type": "object",
+      "description": "Tracks HOW a goal was verified as achieved - enables 'trust but re-verify'",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["detection_command", "consensus_verified", "quality_gate_passed", "manual_claim", "auto_converged"],
+          "description": "How the achievement was verified"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Confidence level based on verification method"
+        },
+        "detection_result": {
+          "type": "object",
+          "properties": {
+            "command": { "type": "string" },
+            "output": { "type": "string" },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" }
+          }
+        },
+        "verified_by": {
+          "type": "string",
+          "description": "Agent or human who verified"
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "git_commit_hash": {
+          "type": "string",
+          "description": "Commit hash at time of verification - for change detection"
+        },
+        "affected_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files that were part of the fix - for change detection"
+        },
+        "ttl_days": {
+          "type": "integer",
+          "default": 30,
+          "description": "Days until re-verification is required (based on confidence)"
+        },
+        "recheck_after": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Computed expiration date for this verification"
+        },
+        "recheck_on_file_change": {
+          "type": "boolean",
+          "default": true,
+          "description": "Invalidate verification if affected files change"
+        },
+        "spot_check_history": {
+          "type": "array",
+          "description": "History of periodic spot-checks",
+          "items": {
+            "type": "object",
+            "properties": {
+              "checked_at": { "type": "string", "format": "date-time" },
+              "still_valid": { "type": "boolean" },
+              "detection_output": { "type": "string" },
+              "notes": { "type": "string" }
             }
           }
         }

@@ -8,6 +8,157 @@ You are executing the ACIS extract command. This command transforms PR review co
 
 ## Workflow
 
+### Phase 0: TRUST BUT RE-VERIFY (Duplicate & Resolution Check)
+
+Before creating new goals, check for existing resolutions and apply re-verification logic.
+
+**Principle**: Don't skip entirely—downgrade priority with re-verification triggers.
+
+#### Phase 0.1: Load Existing State
+
+```bash
+# Load config
+config=$(cat .acis-config.json 2>/dev/null || echo '{}')
+goals_dir=$(echo "$config" | jq -r '.paths.goals // "docs/acis/goals"')
+resolutions_file=$(echo "$config" | jq -r '.paths.resolutions // "docs/acis/known-resolutions.json"')
+
+# Load existing goals and resolutions
+existing_goals=$(find "$goals_dir" -name "*.json" -type f 2>/dev/null)
+known_resolutions=$(cat "$resolutions_file" 2>/dev/null || echo '{"resolutions":[]}')
+```
+
+#### Phase 0.2: Build Resolution Index
+
+For each potential issue found, check against:
+
+1. **Known Resolutions Registry** (`known-resolutions.json`)
+   - Intentional exceptions: `by_design`, `mitigated`, `false_positive`, `wont_fix`
+
+2. **Existing Goals** (in `goals_dir/*.json`)
+   - Status: `achieved`, `verified_acceptable`, `blocked`, `deferred`
+
+#### Phase 0.3: Re-verification Triggers (CRITICAL)
+
+**DO NOT skip resolved items blindly. Apply these checks:**
+
+| Condition | Action | Rationale |
+|-----------|--------|-----------|
+| File changed since resolution | **FULL RE-CHECK** | Regression risk |
+| TTL expired (> N days) | **SPOT-CHECK** | Stale assumption |
+| Low confidence verification | **RE-CHECK** | Weak evidence |
+| Random 10% sample | **SPOT-CHECK** | Catch silent failures |
+
+```bash
+# Phase 0.3.1: Git Change Detection
+check_file_changed() {
+  local file_path="$1"
+  local since_date="$2"
+  local changes=$(git log --since="$since_date" --oneline -- "$file_path" 2>/dev/null | head -1)
+  [ -n "$changes" ] && echo "CHANGED" || echo "UNCHANGED"
+}
+
+# Phase 0.3.2: TTL Expiration Check
+check_ttl_expired() {
+  local recheck_after="$1"
+  local now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  [[ "$now" > "$recheck_after" ]] && echo "EXPIRED" || echo "VALID"
+}
+
+# Phase 0.3.3: Confidence-Based TTL
+get_ttl_days() {
+  local confidence="$1"
+  case "$confidence" in
+    "high")   echo 60 ;;
+    "medium") echo 30 ;;
+    "low")    echo 14 ;;
+    *)        echo 30 ;;
+  esac
+}
+```
+
+#### Phase 0.4: Categorize Each Potential Issue
+
+For each issue detected, categorize:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     RESOLUTION CHECK DECISION TREE                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    ┌─────────────────┐
+                    │  Issue Found    │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+     ┌────────────┐  ┌────────────┐  ┌────────────┐
+     │ In Known   │  │ In Existing│  │ New Issue  │
+     │ Resolutions│  │ Goals      │  │            │
+     └─────┬──────┘  └─────┬──────┘  └─────┬──────┘
+           │               │               │
+           ▼               ▼               ▼
+    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+    │File Changed?│ │File Changed?│ │CREATE NEW   │
+    └──────┬──────┘ └──────┬──────┘ │GOAL         │
+           │               │        └─────────────┘
+     ┌─────┴─────┐   ┌─────┴─────┐
+     │YES    NO  │   │YES    NO  │
+     ▼           ▼   ▼           ▼
+┌─────────┐┌────────┐┌─────────┐┌────────┐
+│RE-CHECK ││TTL     ││RE-CHECK ││TTL     │
+│MANDATORY││Expired?││MANDATORY││Expired?│
+└─────────┘└───┬────┘└─────────┘└───┬────┘
+               │                    │
+         ┌─────┴─────┐        ┌─────┴─────┐
+         │YES    NO  │        │YES    NO  │
+         ▼           ▼        ▼           ▼
+    ┌─────────┐┌────────┐┌─────────┐┌────────┐
+    │SPOT     ││SOFT    ││SPOT     ││SOFT    │
+    │CHECK    ││SKIP    ││CHECK    ││SKIP    │
+    └─────────┘└────────┘└─────────┘└────────┘
+```
+
+#### Phase 0.5: Spot-Check Sampling (10%)
+
+Even for valid soft-skips, randomly sample 10% for re-verification:
+
+```bash
+# Random sampling for spot-checks
+should_spot_check() {
+  local random=$((RANDOM % 100))
+  [ $random -lt 10 ] && echo "YES" || echo "NO"
+}
+
+# Run spot-check: re-run detection command
+run_spot_check() {
+  local goal_file="$1"
+  local detection_cmd=$(jq -r '.detection.primary_command // .detection.command' "$goal_file")
+  local result=$(eval "$detection_cmd" 2>/dev/null)
+  local expected=$(jq -r '.target.count // 0' "$goal_file")
+
+  # Compare result to expected
+  if [ "$result" = "$expected" ]; then
+    echo "STILL_VALID"
+  else
+    echo "REGRESSION_DETECTED:$result"
+  fi
+}
+```
+
+#### Phase 0.6: Output Categories
+
+After Phase 0, issues are categorized into:
+
+| Category | Action | Show in Report |
+|----------|--------|----------------|
+| `NEW` | Create goal | Goals Extracted |
+| `RE_CHECK_MANDATORY` | Create goal (file changed) | Re-checking (regression risk) |
+| `SPOT_CHECK_FAILED` | Create goal (regression) | Regression Detected |
+| `SPOT_CHECK_PASSED` | Log only | Spot-Check Verified |
+| `SOFT_SKIP` | Log only | Soft-Skipped |
+| `BLOCKED_RETRY` | Prompt user | Previously Blocked |
+
 ### Step 1: Load Configuration
 
 ```bash
@@ -201,6 +352,15 @@ Output summary:
 ║  {timestamp}                                                                  ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
+║  🔍 RE-VERIFICATION SUMMARY (Phase 0)                                        ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  Checked {N} prior resolutions against re-verification triggers:             ║
+║    • File changes detected:     2 → mandatory re-check                       ║
+║    • TTL expired:               1 → spot-check triggered                     ║
+║    • Random 10% sample:         3 → spot-checked (all passed)                ║
+║    • Still valid (soft-skip):   8 → logged, not re-extracted                 ║
+║                                                                              ║
 ║  📥 COMMENTS ANALYZED: {total}                                               ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
 ║                                                                              ║
@@ -219,12 +379,49 @@ Output summary:
 ║  │ PR55-G3-console-log        │ maintain │ low      │ 89      │ 0        │  ║
 ║  └────────────────────────────┴──────────┴──────────┴─────────┴──────────┘  ║
 ║                                                                              ║
+║  🔄 RE-CHECKED (file changes detected): {count}                              ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  • PR55-G4-deprecated-api (was achieved 2026-01-10)                          ║
+║    ↳ REASON: File modified on 2026-01-25 (15 days after resolution)         ║
+║    ↳ ACTION: Re-created goal for verification                                ║
+║                                                                              ║
+║  ⏰ RE-CHECKED (TTL expired): {count}                                        ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  • PR42-G5-unsafe-cast (was achieved 2025-12-15, medium confidence)          ║
+║    ↳ REASON: TTL expired (30-day limit reached on 2026-01-14)               ║
+║    ↳ ACTION: Spot-check triggered, detection command re-run                  ║
+║    ↳ RESULT: Still valid (0 instances) — resolution extended to 2026-02-27 ║
+║                                                                              ║
+║  • KR-002 metadata.status (by_design, verified 2025-12-01)                   ║
+║    ↳ REASON: TTL expired (60-day limit reached on 2026-01-30)               ║
+║    ↳ ACTION: Spot-check required — verify mitigations still apply           ║
+║                                                                              ║
+║  ⚠️ REGRESSIONS DETECTED (spot-check failed): {count}                        ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  • PR42-G2-hardcoded-secret (was achieved, now showing 2 instances)         ║
+║    ↳ Was: 0, Now: 2 — goal re-opened                                         ║
+║                                                                              ║
+║  ✅ SPOT-CHECK VERIFIED: {count}                                             ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  • PR41-G1-sql-injection (sampled, still at 0 instances)                    ║
+║                                                                              ║
+║  ⏭️ SOFT-SKIPPED (previously resolved, no changes): {count}                  ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  • console.log in service-worker.js (KR-001, by_design, verified 2026-01-15)║
+║    ↳ Recheck scheduled: 2026-02-15 or on file modification                   ║
+║  • PR50-G3-any-type (achieved 2026-01-20, high confidence)                  ║
+║    ↳ Recheck scheduled: 2026-03-20                                           ║
+║                                                                              ║
 ║  ⏭️ SKIPPED COMMENTS: {count}                                                ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
 ║                                                                              ║
 ║  • Subjective/Opinion: {count}                                               ║
 ║  • Questions: {count}                                                        ║
-║  • Already resolved: {count}                                                 ║
 ║                                                                              ║
 ║  📁 Files Created:                                                           ║
 ║    docs/acis/goals/PR55-G1-math-random.json                                 ║
@@ -249,6 +446,14 @@ Output summary:
 | `--output-dir <path>` | Override goals output directory |
 | `--skip-baseline` | Skip baseline measurement (faster, fill in later) |
 | `--json` | Output raw JSON instead of formatted report |
+| **Re-verification Flags** | |
+| `--no-duplicate-check` | Skip Phase 0 entirely (extract all, ignore prior resolutions) |
+| `--force-recheck` | Re-check ALL previously resolved items (ignore TTL/file-change logic) |
+| `--show-soft-skipped` | Show detailed list of all soft-skipped items |
+| `--spot-check-percent N` | Override spot-check sampling rate (default: 10) |
+| `--ttl-override N` | Override TTL days for all confidence levels |
+| `--update-registry` | Prompt to add new items to known-resolutions.json |
+| `--recheck-blocked` | Include previously blocked goals for re-attempt |
 
 ## Quality Criteria
 

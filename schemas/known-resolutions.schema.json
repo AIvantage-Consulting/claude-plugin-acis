@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "known-resolutions.schema.json",
+  "title": "ACIS Known Resolutions Registry",
+  "description": "Registry for intentional exceptions and design decisions - NOT for tracking goal fixes (use goal files for that)",
+  "type": "object",
+  "required": ["schema_version", "resolutions"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "description": {
+      "type": "string",
+      "default": "Intentional exceptions and design decisions that should not be re-flagged by /acis:extract"
+    },
+    "resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "resolution_type", "pattern", "rationale", "verification"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier (e.g., 'KR-001')",
+            "pattern": "^KR-[0-9]{3}$"
+          },
+          "resolution_type": {
+            "type": "string",
+            "enum": ["by_design", "mitigated", "false_positive", "deferred", "wont_fix"],
+            "description": "Why this is not being 'fixed' in the traditional sense"
+          },
+          "pattern": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["regex", "literal", "file_path", "semantic"]
+              },
+              "value": {
+                "type": "string",
+                "description": "The pattern to match (regex, literal string, or file path)"
+              },
+              "file_paths": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Specific file paths this resolution applies to"
+              },
+              "lens": {
+                "type": "string",
+                "enum": ["security", "privacy", "performance", "maintainability", "accessibility", "architecture", "testing", "operations"],
+                "description": "Assessment lens this resolution relates to"
+              }
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this is intentionally not fixed - must be specific and justified"
+          },
+          "mitigations": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "For 'mitigated' type: what compensating controls exist"
+          },
+          "verification": {
+            "type": "object",
+            "required": ["method", "verified_at"],
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": ["code_review", "architecture_decision", "risk_acceptance", "manual_verification", "automated_check"],
+                "description": "How this resolution was verified as acceptable"
+              },
+              "verified_by": {
+                "type": "string",
+                "description": "Who verified this resolution (human name or agent ID)"
+              },
+              "verified_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "git_commit_hash": {
+                "type": "string",
+                "description": "Commit hash at time of resolution - for change detection"
+              },
+              "evidence": {
+                "type": "string",
+                "description": "Link to ADR, PR comment, or other evidence"
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "default": "medium",
+            "description": "Confidence that this resolution is still valid"
+          },
+          "ttl": {
+            "type": "object",
+            "properties": {
+              "days": {
+                "type": "integer",
+                "default": 30,
+                "description": "Days until re-verification required"
+              },
+              "recheck_after": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Computed: verified_at + ttl_days"
+              },
+              "recheck_on_file_change": {
+                "type": "boolean",
+                "default": true,
+                "description": "Invalidate if affected files change since verification"
+              }
+            }
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "applies_to": {
+                "type": "string",
+                "enum": ["specific_files", "pattern_anywhere", "specific_context"],
+                "default": "specific_files"
+              },
+              "file_paths": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "context_conditions": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Conditions under which this resolution applies"
+              }
+            }
+          },
+          "spot_check_history": {
+            "type": "array",
+            "description": "History of periodic re-verifications",
+            "items": {
+              "type": "object",
+              "properties": {
+                "checked_at": { "type": "string", "format": "date-time" },
+                "still_valid": { "type": "boolean" },
+                "checked_by": { "type": "string" },
+                "notes": { "type": "string" },
+                "files_changed_since": { "type": "boolean" }
+              }
+            }
+          },
+          "related": {
+            "type": "object",
+            "properties": {
+              "goal_ids": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Related ACIS goals"
+              },
+              "adr_id": {
+                "type": "string",
+                "description": "Related Architecture Decision Record"
+              },
+              "pr_numbers": {
+                "type": "array",
+                "items": { "type": "integer" }
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "created_at": { "type": "string", "format": "date-time" },
+              "created_by": { "type": "string" },
+              "updated_at": { "type": "string", "format": "date-time" },
+              "tags": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
