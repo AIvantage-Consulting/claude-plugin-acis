@@ -1,7 +1,7 @@
 {
   "name": "acis",
-  "version": "2.3.0",
-  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Parallel Remediation, and Consensus verification",
+  "version": "2.4.0",
+  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Parallel Remediation, Observability Traces, and Consensus verification",
   "author": {
     "name": "AIvantage Consulting Inc",
     "url": "https://aivantage-consulting.com"

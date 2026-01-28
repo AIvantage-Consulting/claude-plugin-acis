@@ -1,0 +1,292 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "acis-trace.schema.json",
+  "title": "ACIS Trace Schema",
+  "description": "Structured observability traces for ACIS execution - enables user visibility and Process Auditor learning",
+  "type": "object",
+  "required": ["trace_id", "timestamp", "location", "trace_type"],
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "pattern": "^T-[A-Z0-9]+-[0-9]{4}$",
+      "description": "Unique trace identifier (e.g., T-WO63-0001)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier for grouping related traces"
+    },
+    "goal_id": {
+      "type": "string",
+      "description": "Associated goal (if applicable)"
+    },
+    "batch_id": {
+      "type": "string",
+      "description": "Associated parallel batch (if applicable)"
+    },
+
+    "location": {
+      "type": "object",
+      "required": ["loop", "phase"],
+      "description": "Where in ACIS execution this trace originated",
+      "properties": {
+        "loop": {
+          "type": "string",
+          "enum": ["outer", "middle", "inner", "parallel"],
+          "description": "Which loop: outer=process-auditor, middle=discovery, inner=behavioral-tdd, parallel=parallel-remediation"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "init", "discovery", "decide", "extract", "scaffold", "verify",
+            "behavioral-tdd", "ralph-loop", "consensus", "quality-gate",
+            "safety-analysis", "worktree-setup", "parallel-execution", "integration-merge", "squash-cleanup",
+            "pause", "reflect", "learn", "apply", "document"
+          ],
+          "description": "Current phase within the loop"
+        },
+        "stage": {
+          "type": "string",
+          "description": "Sub-stage within phase (e.g., 'wave-1', '5-whys', 'step-02')"
+        },
+        "iteration": {
+          "type": "integer",
+          "description": "Iteration number (for loops)"
+        },
+        "step_id": {
+          "type": "string",
+          "description": "Step ID for parallel remediation"
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Which agent emitted this trace"
+        }
+      }
+    },
+
+    "trace_type": {
+      "type": "string",
+      "enum": ["lifecycle", "decision", "knowledge", "skill", "effectiveness", "blocker"],
+      "description": "Category of trace"
+    },
+
+    "severity": {
+      "type": "string",
+      "enum": ["info", "warn", "error", "debug"],
+      "default": "info"
+    },
+
+    "message": {
+      "type": "string",
+      "description": "Human-readable trace message (shown to user with [ACIS] prefix)"
+    },
+
+    "lifecycle": {
+      "type": "object",
+      "description": "For trace_type=lifecycle: phase/stage transitions",
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": ["start", "end", "transition", "spawn", "complete", "abort"]
+        },
+        "from": {
+          "type": "object",
+          "properties": {
+            "phase": { "type": "string" },
+            "stage": { "type": "string" }
+          }
+        },
+        "to": {
+          "type": "object",
+          "properties": {
+            "phase": { "type": "string" },
+            "stage": { "type": "string" }
+          }
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "Duration of completed phase/stage"
+        },
+        "agents_spawned": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Agent IDs spawned (for spawn events)"
+        }
+      }
+    },
+
+    "decision": {
+      "type": "object",
+      "description": "For trace_type=decision: micro-decisions made by AI",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "fix-ordering", "file-selection", "approach-choice", "tool-selection",
+            "retry-strategy", "escalation", "skip-reason", "conflict-resolution",
+            "verification-method", "rollback-decision"
+          ]
+        },
+        "decision": {
+          "type": "string",
+          "description": "What was decided"
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Why this decision was made"
+        },
+        "alternatives_considered": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "context_factors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What context influenced this decision"
+        }
+      }
+    },
+
+    "knowledge": {
+      "type": "object",
+      "description": "For trace_type=knowledge: knowledge gaps or applications",
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": ["needed", "applied", "missing", "learned"]
+        },
+        "domain": {
+          "type": "string",
+          "description": "Knowledge domain (e.g., 'indexeddb-api', 'crypto-web-api')"
+        },
+        "topic": {
+          "type": "string",
+          "description": "Specific topic within domain"
+        },
+        "source": {
+          "type": "string",
+          "description": "Where knowledge came from (if applied)"
+        },
+        "gap_impact": {
+          "type": "string",
+          "enum": ["blocking", "slowing", "minor"],
+          "description": "Impact of knowledge gap (if missing/needed)"
+        }
+      }
+    },
+
+    "skill": {
+      "type": "object",
+      "description": "For trace_type=skill: skill applications or candidates",
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": ["applied", "needed", "candidate", "ineffective"]
+        },
+        "skill_id": {
+          "type": "string",
+          "description": "Skill identifier (if existing skill)"
+        },
+        "skill_name": {
+          "type": "string",
+          "description": "Human-readable skill name"
+        },
+        "pattern_match": {
+          "type": "string",
+          "description": "What pattern triggered this skill"
+        },
+        "effectiveness": {
+          "type": "string",
+          "enum": ["effective", "partial", "ineffective"]
+        }
+      }
+    },
+
+    "effectiveness": {
+      "type": "object",
+      "description": "For trace_type=effectiveness: workflow/orchestration metrics",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": [
+            "iterations_to_complete", "backtrack_count", "agent_spawns",
+            "context_refreshes", "retries", "time_in_phase", "parallel_efficiency"
+          ]
+        },
+        "value": {},
+        "baseline": {
+          "description": "Expected/baseline value for comparison"
+        },
+        "assessment": {
+          "type": "string",
+          "enum": ["better", "expected", "worse"]
+        },
+        "contributing_factors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "blocker": {
+      "type": "object",
+      "description": "For trace_type=blocker: what's blocking progress",
+      "properties": {
+        "blocker_type": {
+          "type": "string",
+          "enum": [
+            "knowledge_gap", "tool_limitation", "dependency", "conflict",
+            "verification_failure", "external_dependency", "unclear_requirement"
+          ]
+        },
+        "description": { "type": "string" },
+        "resolution_attempted": { "type": "string" },
+        "resolved": { "type": "boolean" },
+        "resolution_method": { "type": "string" },
+        "escalated_to": { "type": "string" }
+      }
+    },
+
+    "files_involved": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files relevant to this trace"
+    },
+
+    "metrics_snapshot": {
+      "type": "object",
+      "description": "Metric values at time of trace",
+      "additionalProperties": true
+    },
+
+    "process_auditor_hints": {
+      "type": "object",
+      "description": "Explicit hints for Process Auditor consumption",
+      "properties": {
+        "pattern_candidate": {
+          "type": "boolean",
+          "description": "This trace represents a repeatable pattern"
+        },
+        "skill_candidate": {
+          "type": "boolean",
+          "description": "This trace suggests a skill should be created"
+        },
+        "process_improvement": {
+          "type": "boolean",
+          "description": "This trace suggests a process improvement"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

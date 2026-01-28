@@ -232,6 +232,18 @@
           "description": "Path to known-resolutions registry file",
           "default": "docs/acis/known-resolutions.json",
           "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "traces": {
+          "type": "string",
+          "description": "Directory for project-specific execution traces (per-session subdirectories)",
+          "default": "docs/acis/traces",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "processTraces": {
+          "type": "string",
+          "description": "Directory for process-oriented traces (workflow effectiveness, skill patterns)",
+          "default": ".acis/traces",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
         }
       },
       "additionalProperties": false

@@ -68,16 +68,29 @@ The Process Auditor is the **outermost loop** (Loop 1) in ACIS's three-loop arch
    - Time to resolution (if tracked)
    - Detection command effectiveness
    - 5 Whys depth reached
-4. Load reflection prompts from `${CLAUDE_PLUGIN_ROOT}/audit/reflection-prompts.md`
-5. Run pattern analysis
+4. **Load execution traces** from `${config.paths.processTraces}/`:
+   - `decisions/*.jsonl` - Micro-decisions made during remediation
+   - `knowledge/*.jsonl` - Knowledge gaps and applications
+   - `skills/*.jsonl` - Skill usage and candidates
+   - `effectiveness/*.jsonl` - Workflow effectiveness metrics
+5. Load reflection prompts from `${CLAUDE_PLUGIN_ROOT}/audit/reflection-prompts.md`
+6. Run pattern analysis (goal data + trace data)
+
+**Trace-Informed Analysis**:
+- Aggregate `decision` traces to find recurring approaches
+- Scan for `process_auditor_hints.skill_candidate: true`
+- Track `knowledge.event: "missing"` to identify documentation needs
+- Compare `effectiveness.assessment` across goals
 
 **Key Questions** (from reflection-prompts.md):
 - What patterns emerged across these remediations?
 - Which detection commands caught issues early vs. late?
 - Which 5 Whys analyses led to lasting fixes vs. rework?
 - What step sequences were repeated?
+- What micro-decisions led to efficient vs. inefficient outcomes? *(from traces)*
+- What knowledge gaps are recurring? *(from traces)*
 
-**Output**: Pattern analysis data
+**Output**: Pattern analysis data (enriched with trace insights)
 
 ### Phase 3: LEARN
 
@@ -88,18 +101,28 @@ The Process Auditor is the **outermost loop** (Loop 1) in ACIS's three-loop arch
    - Prompt patterns that led to efficient fixes
    - Agent combinations that worked well
    - Detection commands with high accuracy
+   - Decision patterns with `confidence: high` and positive outcomes *(from traces)*
+   - Knowledge applications that prevented blockers *(from traces)*
 
 2. **Identify Corrections** (behaviors to change):
    - Patterns that caused friction or rework
    - Assumptions that proved wrong
    - Detection commands that missed issues
+   - Decision patterns with repeated `confidence: low` *(from traces)*
+   - Recurring `blocker` traces with same `blocker_type` *(from traces)*
 
 3. **Identify Skill Candidates** (repeated sequences):
    - Scan for step sequences executed 5+ times
+   - **Scan traces with `process_auditor_hints.skill_candidate: true`**
    - Evaluate against skill detection criteria (from skill-detection.md)
    - Score ROI potential (>20% time savings threshold)
 
-**Output**: Reinforcements, corrections, skill candidates
+4. **Identify Knowledge Gaps** *(from traces)*:
+   - Aggregate `knowledge.event: "missing"` traces
+   - Prioritize by `gap_impact: "blocking"` count
+   - Recommend documentation or training additions
+
+**Output**: Reinforcements, corrections, skill candidates, knowledge gap report
 
 ### Phase 4: APPLY
 
@@ -182,14 +205,45 @@ The Process Auditor can run autonomously via ralph-loop:
 }
 ```
 
+## Trace Data Sources
+
+The Process Auditor consumes structured traces from `${config.paths.processTraces}/`:
+
+| Trace Type | Location | Usage |
+|------------|----------|-------|
+| Decisions | `decisions/{goal-id}-decisions.jsonl` | Pattern detection, approach effectiveness |
+| Knowledge | `knowledge/knowledge-*.jsonl` | Gap identification, documentation needs |
+| Skills | `skills/skill-*.jsonl` | Candidate identification, usage tracking |
+| Effectiveness | `effectiveness/*.jsonl` | Workflow metrics, improvement detection |
+| Blockers | (aggregated from session traces) | Recurring blocker analysis |
+
+### Trace Query Examples
+
+```bash
+# Find skill candidates flagged during execution
+grep '"skill_candidate":true' ${config.paths.processTraces}/decisions/*.jsonl
+
+# Aggregate iterations to completion
+jq -s 'map(select(.effectiveness.metric == "iterations_to_complete")) | group_by(.goal_id)' \
+  ${config.paths.processTraces}/effectiveness/*.jsonl
+
+# Find recurring knowledge gaps
+jq -s 'map(select(.knowledge.event == "missing")) | group_by(.knowledge.domain) | map({domain: .[0].knowledge.domain, count: length}) | sort_by(-.count)' \
+  ${config.paths.processTraces}/knowledge/*.jsonl
+
+# Identify high-impact blockers
+jq 'select(.blocker.blocker_type and .blocker.resolved == false)' \
+  ${config.paths.traces}/*/trace-log.jsonl
+```
+
 ## Output Locations
 
 | Artifact | Location |
 |----------|----------|
-| Audit reports | `docs/audits/AUDIT-{timestamp}.md` |
-| Generated skills | `skills/{skill-name}/SKILL.md` |
-| Archived skills | `skills/.archive/` |
-| State updates | `.acis-state.json` (if used) |
+| Audit reports | `${config.paths.audits}/AUDIT-{timestamp}.md` |
+| Generated skills | `${config.paths.skills}/{skill-name}/SKILL.md` |
+| Archived skills | `${config.paths.skills}/.archive/` |
+| State updates | `${config.paths.state}/audit-state.json` |
 
 ## Integration with Other Commands
 

@@ -13,6 +13,7 @@ A Claude Plugin for decision-oriented discovery, behavioral TDD remediation, and
 - **Parallel Remediation** (`/acis remediate-parallel`) - Worktree-isolated parallel goal execution
 - **Trust but Re-verify** - Smart duplicate detection with TTL and change detection
 - **Quality Gate** - Codex code review before marking goals achieved
+- **ACIS Traces** - User-visible and structured observability for Process Auditor learning
 - **Process Auditor** (`/acis audit`) - Pattern analysis and dynamic skill generation
 - **Three-Loop Architecture** - Process → Discovery → Remediation loops
 
@@ -244,6 +245,16 @@ acis/
 - MCP server: `codex` (optional, for deep analysis)
 
 ## Version History
+
+### v2.4.0 (2026-01-28)
+- **ACIS Traces / Observability**: Dual-purpose tracing for user visibility and Process Auditor learning
+  - User-visible traces with `[ACIS:{loop}:{phase}]` prefix
+  - Structured observability traces capturing micro-decisions, knowledge gaps, skill applications
+  - Trace types: lifecycle, decision, knowledge, skill, effectiveness, blocker
+  - Separate storage: project traces in `docs/acis/traces/`, process traces in `.acis/traces/`
+- New schema: `acis-trace.schema.json`
+- New prompt: `trace-emission.md` defining trace emission patterns
+- Process Auditor updated to consume traces as additional context
 
 ### v2.3.0 (2026-01-28)
 - **Parallel Remediation**: Worktree-isolated parallel goal execution with integration branch merge
