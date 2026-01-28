@@ -196,6 +196,42 @@
           "description": "Directory for runtime state files",
           "default": "docs/acis/state",
           "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "progress": {
+          "type": "string",
+          "description": "Directory for goal progress tracking",
+          "default": "docs/acis/state/progress",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "steps": {
+          "type": "string",
+          "description": "Directory for step manifests (per-goal subdirectories)",
+          "default": "docs/acis/state/steps",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "parallel": {
+          "type": "string",
+          "description": "Directory for parallel batch state files",
+          "default": "docs/acis/state/parallel",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "mergeReports": {
+          "type": "string",
+          "description": "Directory for batch merge reports",
+          "default": "docs/acis/merge-reports",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "worktrees": {
+          "type": "string",
+          "description": "Root directory for git worktrees (git-ignored, ephemeral)",
+          "default": ".acis-work",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
+        },
+        "knownResolutions": {
+          "type": "string",
+          "description": "Path to known-resolutions registry file",
+          "default": "docs/acis/known-resolutions.json",
+          "pattern": "^(?!/)(?!.*\\.\\.).*$"
         }
       },
       "additionalProperties": false

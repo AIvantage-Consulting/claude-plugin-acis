@@ -1,0 +1,356 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "merge-report.schema.json",
+  "title": "ACIS Batch Merge Report",
+  "description": "Schema for documenting parallel batch merge results and verification",
+  "type": "object",
+  "required": ["batch_id", "started_at", "goal_merges", "summary"],
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "description": "Batch identifier"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "description": "Total merge duration in seconds"
+    },
+    "integration_branch": {
+      "type": "object",
+      "description": "Integration branch details",
+      "required": ["name", "base_commit"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Integration branch name (e.g., acis/integrate-WO63-batch-001)"
+        },
+        "base_commit": {
+          "type": "string",
+          "description": "Commit hash at integration start"
+        },
+        "final_commit": {
+          "type": "string",
+          "description": "Final commit hash after all merges"
+        },
+        "total_commits": {
+          "type": "integer",
+          "description": "Total commits in integration branch"
+        }
+      }
+    },
+    "goal_merges": {
+      "type": "array",
+      "description": "Per-goal merge results",
+      "items": {
+        "type": "object",
+        "required": ["goal_id", "status"],
+        "properties": {
+          "goal_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["merged", "partial", "conflict", "skipped"],
+            "description": "Merge outcome for this goal"
+          },
+          "merge_type": {
+            "type": "string",
+            "enum": ["regular", "cherry_pick", "rebase"],
+            "description": "How this goal was merged"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Source branch (e.g., acis/WO63-CRIT-001-key-rotation)"
+          },
+          "commits_merged": {
+            "type": "integer",
+            "description": "Number of commits successfully merged"
+          },
+          "commits_total": {
+            "type": "integer",
+            "description": "Total commits in goal branch"
+          },
+          "commits_skipped": {
+            "type": "integer",
+            "description": "Commits that could not be merged"
+          },
+          "merge_commit": {
+            "type": "string",
+            "description": "Merge commit hash (for regular merge)"
+          },
+          "cherry_picked_commits": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Individual commit hashes (for cherry-pick)"
+          },
+          "conflict_details": {
+            "type": "object",
+            "description": "Conflict information if status is conflict or partial",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["trivial", "partial", "semantic", "unresolvable"],
+                "description": "Conflict severity classification"
+              },
+              "files": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Files with conflicts"
+              },
+              "conflicting_goal": {
+                "type": "string",
+                "description": "Goal ID that caused the conflict"
+              },
+              "resolution": {
+                "type": "string",
+                "description": "How conflict was resolved"
+              },
+              "unresolved_reason": {
+                "type": "string",
+                "description": "Why conflict could not be resolved"
+              }
+            }
+          },
+          "metric_progress": {
+            "type": "object",
+            "description": "Detection metric before/after this merge",
+            "properties": {
+              "before": {},
+              "after": {},
+              "target": {},
+              "improvement_percentage": { "type": "number" }
+            }
+          },
+          "new_goal_created": {
+            "type": "string",
+            "description": "If partial, ID of new goal for remaining work"
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "Verification results on integration branch",
+      "required": ["overall_status"],
+      "properties": {
+        "overall_status": {
+          "type": "string",
+          "enum": ["passed", "failed", "partial"],
+          "description": "Overall verification outcome"
+        },
+        "detection_commands_passed": {
+          "type": "boolean",
+          "description": "All goal detection commands passed"
+        },
+        "tests_passed": {
+          "type": "boolean",
+          "description": "Test suite passed"
+        },
+        "build_passed": {
+          "type": "boolean",
+          "description": "Build succeeded"
+        },
+        "lint_passed": {
+          "type": "boolean",
+          "description": "Linting passed"
+        },
+        "type_check_passed": {
+          "type": "boolean",
+          "description": "Type checking passed"
+        },
+        "custom_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "passed": { "type": "boolean" },
+              "output": { "type": "string" }
+            }
+          }
+        },
+        "failures": {
+          "type": "array",
+          "description": "Verification failures",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["detection", "test", "build", "lint", "type_check", "custom"]
+              },
+              "message": { "type": "string" },
+              "goal_id": {
+                "type": "string",
+                "description": "Goal responsible (if identifiable)"
+              },
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "bisected_to_commit": {
+                "type": "string",
+                "description": "Commit that introduced the failure (via git bisect)"
+              }
+            }
+          }
+        },
+        "ran_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "squash_to_main": {
+      "type": "object",
+      "description": "Final squash merge to main",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "skipped"],
+          "description": "Squash merge status"
+        },
+        "commit": {
+          "type": "string",
+          "description": "Squash commit hash on main"
+        },
+        "message": {
+          "type": "string",
+          "description": "Full commit message"
+        },
+        "merged_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "pushed": {
+          "type": "boolean",
+          "description": "Whether pushed to origin"
+        },
+        "skip_reason": {
+          "type": "string",
+          "description": "Why squash was skipped (if applicable)"
+        }
+      }
+    },
+    "history_preserved": {
+      "type": "object",
+      "description": "Git tags created for history preservation",
+      "properties": {
+        "integration_tag": {
+          "type": "string",
+          "description": "Tag for integration branch history"
+        },
+        "goal_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for individual goal branches"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When these tags can be cleaned up"
+        }
+      }
+    },
+    "worktrees_cleaned": {
+      "type": "object",
+      "description": "Worktree cleanup results",
+      "properties": {
+        "removed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Worktree paths removed"
+        },
+        "preserved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          },
+          "description": "Worktrees kept for debugging"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Batch execution summary",
+      "required": ["goals_complete", "goals_partial", "goals_failed"],
+      "properties": {
+        "goals_complete": {
+          "type": "integer",
+          "description": "Goals fully merged and verified"
+        },
+        "goals_partial": {
+          "type": "integer",
+          "description": "Goals partially merged"
+        },
+        "goals_failed": {
+          "type": "integer",
+          "description": "Goals that could not be merged"
+        },
+        "goals_skipped": {
+          "type": "integer",
+          "description": "Goals intentionally skipped"
+        },
+        "total_commits_merged": {
+          "type": "integer"
+        },
+        "total_files_changed": {
+          "type": "integer"
+        },
+        "total_insertions": {
+          "type": "integer"
+        },
+        "total_deletions": {
+          "type": "integer"
+        },
+        "new_goals_created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "New goals created for partial work"
+        },
+        "conflicts_encountered": {
+          "type": "integer"
+        },
+        "conflicts_resolved": {
+          "type": "integer"
+        },
+        "conflicts_unresolved": {
+          "type": "integer"
+        }
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "description": "Recommended next actions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["review_conflict", "retry_goal", "manual_fix", "run_tests", "push_to_origin", "cleanup_tags"]
+          },
+          "target": { "type": "string" },
+          "reason": { "type": "string" },
+          "command": { "type": "string" }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "generated_at": { "type": "string", "format": "date-time" },
+        "generated_by": { "type": "string" },
+        "acis_version": { "type": "string" }
+      }
+    }
+  }
+}

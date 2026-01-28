@@ -1,0 +1,147 @@
+{
+  "$schema": "../schemas/step-manifest.schema.json",
+  "goal_id": "WO63-CRIT-001-key-rotation",
+  "batch_id": "BATCH-WO63-001",
+  "decomposition_strategy": "by_file",
+  "max_files_per_step": 3,
+  "verification_mode": "after_each_step",
+  "created_at": "2026-01-28T10:01:00Z",
+  "updated_at": "2026-01-28T10:15:00Z",
+  "steps": [
+    {
+      "step_id": "WO63-CRIT-001-S01",
+      "order": 1,
+      "action": "detect",
+      "description": "baseline hardcoded key count",
+      "scope": {
+        "files": ["src/auth/keys.ts", "src/crypto/rotation.ts", "src/config/secrets.ts"]
+      },
+      "verification": {
+        "command": "grep -r 'hardcodedKey\\|secretKey.*=' --include='*.ts' src/ | wc -l",
+        "expected_before": 12,
+        "expected_after": 12,
+        "comparison": "eq"
+      },
+      "commit": {
+        "message_template": "[${step_id}] ${action}: ${description}",
+        "include_metrics": true
+      },
+      "dependencies": [],
+      "status": "complete"
+    },
+    {
+      "step_id": "WO63-CRIT-001-S02",
+      "order": 2,
+      "action": "fix",
+      "description": "replace hardcoded keys in auth module",
+      "scope": {
+        "files": ["src/auth/keys.ts"],
+        "patterns": ["hardcodedKey", "secretKey.*="]
+      },
+      "verification": {
+        "command": "grep -r 'hardcodedKey\\|secretKey.*=' src/auth/keys.ts | wc -l",
+        "expected_before": 5,
+        "expected_after": 0,
+        "comparison": "eq"
+      },
+      "commit": {
+        "message_template": "[${step_id}] ${action}: ${description}",
+        "include_metrics": true
+      },
+      "dependencies": ["WO63-CRIT-001-S01"],
+      "rollback": {
+        "strategy": "git_reset"
+      },
+      "status": "complete"
+    },
+    {
+      "step_id": "WO63-CRIT-001-S03",
+      "order": 3,
+      "action": "fix",
+      "description": "replace hardcoded keys in crypto module",
+      "scope": {
+        "files": ["src/crypto/rotation.ts", "src/config/secrets.ts"],
+        "patterns": ["hardcodedKey", "secretKey.*="]
+      },
+      "verification": {
+        "command": "grep -r 'hardcodedKey\\|secretKey.*=' src/crypto/rotation.ts src/config/secrets.ts | wc -l",
+        "expected_before": 7,
+        "expected_after": 0,
+        "comparison": "eq"
+      },
+      "commit": {
+        "message_template": "[${step_id}] ${action}: ${description}",
+        "include_metrics": true
+      },
+      "dependencies": ["WO63-CRIT-001-S02"],
+      "rollback": {
+        "strategy": "git_reset"
+      },
+      "status": "in_progress"
+    },
+    {
+      "step_id": "WO63-CRIT-001-S04",
+      "order": 4,
+      "action": "verify",
+      "description": "confirm zero hardcoded keys remaining",
+      "scope": {
+        "files": ["src/auth/keys.ts", "src/crypto/rotation.ts", "src/config/secrets.ts"]
+      },
+      "verification": {
+        "command": "grep -r 'hardcodedKey\\|secretKey.*=' --include='*.ts' src/ | wc -l",
+        "expected_before": 12,
+        "expected_after": 0,
+        "comparison": "eq"
+      },
+      "commit": {
+        "message_template": "[${step_id}] ${action}: ${description}",
+        "include_metrics": true
+      },
+      "dependencies": ["WO63-CRIT-001-S03"],
+      "status": "pending"
+    }
+  ],
+  "execution_state": {
+    "current_step": "WO63-CRIT-001-S03",
+    "steps_completed": ["WO63-CRIT-001-S01", "WO63-CRIT-001-S02"],
+    "steps_failed": [],
+    "steps_skipped": [],
+    "started_at": "2026-01-28T10:02:00Z",
+    "commits": [
+      {
+        "step_id": "WO63-CRIT-001-S01",
+        "commit_hash": "a1b2c3d4",
+        "committed_at": "2026-01-28T10:03:00Z",
+        "message": "[WO63-CRIT-001-S01] detect: baseline hardcoded key count\n\nMetric: 12 → 12 (target: 0)",
+        "metric_before": 12,
+        "metric_after": 12,
+        "files_changed": []
+      },
+      {
+        "step_id": "WO63-CRIT-001-S02",
+        "commit_hash": "e5f6g7h8",
+        "committed_at": "2026-01-28T10:08:00Z",
+        "message": "[WO63-CRIT-001-S02] fix: replace hardcoded keys in auth module\n\nMetric: 5 → 0 (target: 0)",
+        "metric_before": 5,
+        "metric_after": 0,
+        "files_changed": ["src/auth/keys.ts"],
+        "insertions": 23,
+        "deletions": 18
+      }
+    ],
+    "errors": []
+  },
+  "summary": {
+    "total_steps": 4,
+    "completed_steps": 2,
+    "failed_steps": 0,
+    "skipped_steps": 0,
+    "total_files_modified": 1,
+    "total_commits": 2,
+    "metric_improvement": {
+      "before": 12,
+      "after": 7,
+      "target": 0
+    }
+  }
+}

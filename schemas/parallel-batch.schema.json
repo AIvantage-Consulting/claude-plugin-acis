@@ -1,0 +1,283 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "parallel-batch.schema.json",
+  "title": "ACIS Parallel Batch State",
+  "description": "Schema for tracking parallel remediation batch state with worktree isolation",
+  "type": "object",
+  "required": ["batch_id", "work_order", "status", "baseline", "goals"],
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "pattern": "^BATCH-[A-Z0-9]+-[0-9]{3}$",
+      "description": "Unique batch identifier (e.g., BATCH-WO63-001)"
+    },
+    "work_order": {
+      "type": "string",
+      "description": "Parent work order ID"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planning", "executing", "merging", "verifying", "complete", "failed", "partial"],
+      "description": "Current batch execution status"
+    },
+    "baseline": {
+      "type": "object",
+      "required": ["commit", "branch"],
+      "description": "Baseline state before parallel execution",
+      "properties": {
+        "commit": {
+          "type": "string",
+          "description": "Git commit hash of baseline"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Branch name for baseline"
+        },
+        "verified_clean": {
+          "type": "boolean",
+          "description": "Whether baseline was verified as clean before starting"
+        }
+      }
+    },
+    "goals": {
+      "type": "array",
+      "description": "Goals included in this batch",
+      "items": {
+        "type": "object",
+        "required": ["goal_id", "status"],
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "description": "ACIS goal identifier"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Merge order priority (lower = first)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "worktree_created", "executing", "complete", "failed", "partial"],
+            "description": "Goal execution status within batch"
+          },
+          "worktree_path": {
+            "type": "string",
+            "description": "Path to goal's worktree (e.g., .acis-work/WO63-CRIT-001-key-rotation/)"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch for goal (e.g., acis/WO63-CRIT-001-key-rotation)"
+          },
+          "steps_total": {
+            "type": "integer",
+            "description": "Total number of steps for goal"
+          },
+          "steps_complete": {
+            "type": "integer",
+            "description": "Number of steps completed"
+          },
+          "affected_files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files affected by this goal (for conflict detection)"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if failed"
+          }
+        }
+      }
+    },
+    "parallel_groups": {
+      "type": "array",
+      "description": "Goals grouped by file disjointness for safe parallelization",
+      "items": {
+        "type": "object",
+        "required": ["group_id", "goals", "can_parallelize"],
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "description": "Parallel group identifier"
+          },
+          "goals": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Goal IDs in this parallel group"
+          },
+          "can_parallelize": {
+            "type": "boolean",
+            "description": "Whether goals in this group can run in parallel"
+          },
+          "conflicts_with_groups": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Group IDs that conflict with this group (file overlap)"
+          },
+          "conflict_files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files that cause conflicts between groups"
+          }
+        }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "description": "Integration branch state",
+      "properties": {
+        "branch": {
+          "type": "string",
+          "description": "Integration branch name (e.g., acis/integrate-WO63-batch-001)"
+        },
+        "base_commit": {
+          "type": "string",
+          "description": "Commit integration started from"
+        },
+        "current_commit": {
+          "type": "string",
+          "description": "Current HEAD of integration branch"
+        },
+        "goals_merged": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Goal IDs successfully merged"
+        },
+        "goals_pending": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Goal IDs not yet merged"
+        },
+        "verification_status": {
+          "type": "string",
+          "enum": ["pending", "running", "passed", "failed"],
+          "description": "Integration verification status"
+        },
+        "verification_failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "message": { "type": "string" },
+              "goal_id": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "merge_to_main": {
+      "type": "object",
+      "description": "Final squash merge to main",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["squash", "merge", "rebase"],
+          "default": "squash",
+          "description": "Merge strategy for final merge to main"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "complete", "failed", "skipped"],
+          "description": "Final merge status"
+        },
+        "commit": {
+          "type": "string",
+          "description": "Squash commit hash on main"
+        },
+        "squashed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "history_preservation": {
+      "type": "object",
+      "description": "Git tags for history preservation before cleanup",
+      "properties": {
+        "integration_tag": {
+          "type": "string",
+          "description": "Tag for integration branch (e.g., acis/history/BATCH-WO63-001)"
+        },
+        "goal_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for individual goal branches"
+        },
+        "retention_days": {
+          "type": "integer",
+          "default": 30,
+          "description": "Days to retain history tags"
+        },
+        "cleanup_after": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date after which tags can be cleaned up"
+        }
+      }
+    },
+    "worktree_cleanup": {
+      "type": "object",
+      "description": "Worktree cleanup state",
+      "properties": {
+        "cleaned": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Worktree paths that were cleaned up"
+        },
+        "preserved": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Worktree paths preserved (for failed/partial goals)"
+        },
+        "preserve_reason": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of worktree path to reason for preservation"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "max_parallel": {
+          "type": "integer",
+          "default": 4,
+          "description": "Maximum concurrent worktrees"
+        },
+        "step_size": {
+          "type": "integer",
+          "default": 3,
+          "description": "Maximum files per step"
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Whether this was a dry run"
+        },
+        "force_parallel": {
+          "type": "boolean",
+          "description": "Whether parallel was forced despite conflicts"
+        },
+        "push_branches": {
+          "type": "boolean",
+          "description": "Whether goal branches were pushed to origin"
+        }
+      }
+    }
+  }
+}

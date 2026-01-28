@@ -1,0 +1,94 @@
+{
+  "$schema": "../schemas/parallel-batch.schema.json",
+  "batch_id": "BATCH-WO63-001",
+  "work_order": "WO63",
+  "created_at": "2026-01-28T10:00:00Z",
+  "updated_at": "2026-01-28T10:00:00Z",
+  "status": "executing",
+  "baseline": {
+    "commit": "abc123def456",
+    "branch": "main",
+    "verified_clean": true
+  },
+  "goals": [
+    {
+      "goal_id": "WO63-CRIT-001-key-rotation",
+      "priority": 1,
+      "status": "executing",
+      "worktree_path": ".acis-work/WO63-CRIT-001-key-rotation/",
+      "branch": "acis/WO63-CRIT-001-key-rotation",
+      "steps_total": 4,
+      "steps_complete": 2,
+      "affected_files": [
+        "src/auth/keys.ts",
+        "src/crypto/rotation.ts",
+        "src/config/secrets.ts"
+      ],
+      "started_at": "2026-01-28T10:01:00Z"
+    },
+    {
+      "goal_id": "WO63-HIGH-002-math-random",
+      "priority": 2,
+      "status": "worktree_created",
+      "worktree_path": ".acis-work/WO63-HIGH-002-math-random/",
+      "branch": "acis/WO63-HIGH-002-math-random",
+      "steps_total": 5,
+      "steps_complete": 0,
+      "affected_files": [
+        "src/utils/random.ts",
+        "src/session/token.ts",
+        "src/cache/id.ts"
+      ],
+      "started_at": "2026-01-28T10:01:00Z"
+    },
+    {
+      "goal_id": "WO63-MED-003-console-log",
+      "priority": 3,
+      "status": "pending",
+      "worktree_path": ".acis-work/WO63-MED-003-console-log/",
+      "branch": "acis/WO63-MED-003-console-log",
+      "steps_total": 3,
+      "steps_complete": 0,
+      "affected_files": [
+        "src/logging/logger.ts",
+        "src/logging/debug.ts"
+      ]
+    }
+  ],
+  "parallel_groups": [
+    {
+      "group_id": 1,
+      "goals": ["WO63-CRIT-001-key-rotation", "WO63-HIGH-002-math-random", "WO63-MED-003-console-log"],
+      "can_parallelize": true,
+      "conflicts_with_groups": []
+    }
+  ],
+  "integration": {
+    "branch": "acis/integrate-WO63-batch-001",
+    "base_commit": "abc123def456",
+    "goals_merged": [],
+    "goals_pending": ["WO63-CRIT-001-key-rotation", "WO63-HIGH-002-math-random", "WO63-MED-003-console-log"],
+    "verification_status": "pending"
+  },
+  "merge_to_main": {
+    "strategy": "squash",
+    "status": "pending"
+  },
+  "history_preservation": {
+    "integration_tag": "acis/history/BATCH-WO63-001",
+    "goal_tags": [
+      "acis/archive/WO63-CRIT-001-key-rotation",
+      "acis/archive/WO63-HIGH-002-math-random",
+      "acis/archive/WO63-MED-003-console-log"
+    ],
+    "retention_days": 30,
+    "cleanup_after": "2026-02-27T10:00:00Z"
+  },
+  "metadata": {
+    "max_parallel": 4,
+    "step_size": 3,
+    "dry_run": false,
+    "force_parallel": false,
+    "push_branches": false
+  }
+}

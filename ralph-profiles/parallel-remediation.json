@@ -1,0 +1,271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "profile": "parallel-remediation",
+  "version": "2.3.0",
+  "description": "Worktree-isolated parallel goal remediation with integration branch merge",
+  "purpose": "Execute multiple goals in parallel using git worktrees, then merge via integration branch with atomic history preservation",
+
+  "trigger": {
+    "type": "command",
+    "commands": [
+      "/acis remediate-parallel",
+      "/acis:remediate-parallel"
+    ]
+  },
+
+  "context_management": {
+    "pattern": "fresh-agent-per-goal",
+    "orchestrator_budget": "10%",
+    "parallel_execution": "Each goal runs in isolated worktree with dedicated agent",
+    "state_files": {
+      "batch_state": "${config.paths.parallel}/BATCH-{WO}-{NNN}.json",
+      "worktree_registry": "${config.paths.parallel}/worktree-registry.json",
+      "step_manifest": "${config.paths.steps}/{goal-id}/manifest.json",
+      "merge_report": "${config.paths.mergeReports}/BATCH-{WO}-{NNN}-report.json"
+    }
+  },
+
+  "directory_structure": {
+    "description": "Isolated, predictable directory hierarchy for parallel execution",
+    "layout": {
+      "worktrees_root": {
+        "path": "${config.paths.worktrees}/",
+        "default": ".acis-work/",
+        "git_ignored": true,
+        "contents": "One subdirectory per active goal worktree"
+      },
+      "per_goal_worktree": {
+        "path": "${config.paths.worktrees}/{goal-id}/",
+        "example": ".acis-work/WO63-CRIT-001-key-rotation/",
+        "contents": "Full project checkout on goal-specific branch"
+      },
+      "steps_root": {
+        "path": "${config.paths.steps}/",
+        "default": "docs/acis/state/steps/",
+        "contents": "One subdirectory per goal with step manifests"
+      },
+      "per_goal_steps": {
+        "path": "${config.paths.steps}/{goal-id}/",
+        "example": "docs/acis/state/steps/WO63-CRIT-001-key-rotation/",
+        "contents": [
+          "manifest.json - step decomposition and execution state",
+          "S01-detect.json - individual step state (optional)",
+          "S02-fix-auth.json - individual step state (optional)"
+        ]
+      },
+      "parallel_state": {
+        "path": "${config.paths.parallel}/",
+        "default": "docs/acis/state/parallel/",
+        "contents": [
+          "BATCH-{WO}-{NNN}.json - batch execution state",
+          "BATCH-{WO}-{NNN}.lock - batch lock file",
+          "worktree-registry.json - active worktree tracking"
+        ]
+      },
+      "merge_reports": {
+        "path": "${config.paths.mergeReports}/",
+        "default": "docs/acis/merge-reports/",
+        "contents": [
+          "BATCH-{WO}-{NNN}-report.json - machine-readable report",
+          "BATCH-{WO}-{NNN}-report.md - human-readable report"
+        ]
+      }
+    }
+  },
+
+  "phases": [
+    {
+      "name": "SAFETY-ANALYSIS",
+      "order": 0,
+      "description": "Analyze file conflicts and compute parallel groups",
+      "actions": [
+        "ORCHESTRATOR: Load all goal files from ${config.paths.goals}/",
+        "ORCHESTRATOR: For each goal, run detection command to extract affected files",
+        "ORCHESTRATOR: Build conflict matrix (file overlap between goals)",
+        "ORCHESTRATOR: Graph-color to find disjoint parallel groups",
+        "ORCHESTRATOR: Present plan to user with conflict analysis",
+        "ORCHESTRATOR: Wait for confirmation (unless --yes)",
+        "ORCHESTRATOR: Create batch state at ${config.paths.parallel}/BATCH-{WO}-{NNN}.json",
+        "ORCHESTRATOR: Acquire lock file"
+      ],
+      "outputs": ["parallelPlan", "batchState", "conflictMatrix"],
+      "timeout_minutes": 5,
+      "abort_conditions": [
+        "All goals have file conflicts (cannot parallelize)",
+        "User declines confirmation"
+      ]
+    },
+    {
+      "name": "WORKTREE-SETUP",
+      "order": 1,
+      "description": "Create isolated worktrees for each goal",
+      "per_goal": true,
+      "actions": [
+        "Record baseline commit from main",
+        "git worktree add ${config.paths.worktrees}/{goal-id} -b acis/{goal-id} main",
+        "Verify worktree is clean (git status)",
+        "Verify worktree matches baseline (git log -1)",
+        "Register worktree in ${config.paths.parallel}/worktree-registry.json",
+        "Decompose goal into steps (max ${max_files_per_step} files each)",
+        "Write step manifest to ${config.paths.steps}/{goal-id}/manifest.json"
+      ],
+      "outputs": ["worktreeCreated", "stepManifest"],
+      "timeout_minutes": 2,
+      "per_goal_timeout": true
+    },
+    {
+      "name": "PARALLEL-EXECUTION",
+      "order": 2,
+      "description": "Execute remediation in parallel worktrees",
+      "per_goal": true,
+      "parallel": true,
+      "agent_context": {
+        "working_directory": "${config.paths.worktrees}/{goal-id}/",
+        "branch": "acis/{goal-id}",
+        "manifest_path": "${config.paths.steps}/{goal-id}/manifest.json"
+      },
+      "per_step_actions": [
+        "AGENT: Check step dependencies (wait if not met)",
+        "AGENT: Execute step action on step.scope.files",
+        "AGENT: Run step.verification.command",
+        "AGENT: Compare result to step.verification.expected_after",
+        "AGENT: If verification fails → retry OR skip OR abort",
+        "AGENT: git add {step.scope.files}",
+        "AGENT: git commit -m '[{step_id}] {action}: {description}\\n\\nMetric: {before} → {after}'",
+        "AGENT: Update manifest.execution_state",
+        "AGENT: Optional: git push origin acis/{goal-id}"
+      ],
+      "commit_format": {
+        "pattern": "[{step_id}] {action}: {description}",
+        "body": "Metric: {metric_before} → {metric_after} (target: {target})",
+        "examples": [
+          "[WO63-CRIT-001-S01] detect: baseline 12 hardcoded keys",
+          "[WO63-CRIT-001-S02] fix: replace keys in auth module",
+          "[WO63-CRIT-001-S03] verify: 0 hardcoded keys remaining"
+        ]
+      },
+      "outputs": ["stepsComplete", "commitsCreated"],
+      "timeout_minutes": 30,
+      "per_goal_timeout": true
+    },
+    {
+      "name": "INTEGRATION-MERGE",
+      "order": 3,
+      "description": "Sequential merge to integration branch with conflict handling",
+      "actions": [
+        "ORCHESTRATOR: git checkout -b acis/integrate-{WO}-batch-{NNN} main",
+        "ORCHESTRATOR: For each goal (ordered by priority):",
+        "  - git merge acis/{goal-id} --no-ff -m 'Merge {goal-id}'",
+        "  - On conflict → classify and handle per conflict_resolution",
+        "  - After merge → run goal detection command",
+        "  - On regression → git revert HEAD → investigate",
+        "ORCHESTRATOR: Update batch state with merge results",
+        "ORCHESTRATOR: Verify integration branch:",
+        "  - Run ALL detection commands",
+        "  - Run test suite (unless --skip-tests)",
+        "  - Run build (unless --skip-build)"
+      ],
+      "conflict_resolution": {
+        "trivial": {
+          "detection": "Whitespace, import order only",
+          "action": "Auto-resolve using git merge strategies",
+          "auto": true
+        },
+        "partial": {
+          "detection": "Some commits merge, some conflict",
+          "action": "Cherry-pick clean commits, create new goal for rest",
+          "auto": true
+        },
+        "semantic": {
+          "detection": "Logic conflicts between goals",
+          "action": "Preserve worktree, attempt rebase, flag for human if fails",
+          "auto": false
+        },
+        "unresolvable": {
+          "detection": "Cannot merge without data loss",
+          "action": "Preserve all work, generate report, notify user",
+          "auto": false
+        }
+      },
+      "outputs": ["integrationBranch", "mergeResults", "verificationStatus"],
+      "timeout_minutes": 20
+    },
+    {
+      "name": "SQUASH-AND-CLEANUP",
+      "order": 4,
+      "description": "Squash to main and cleanup worktrees",
+      "actions": [
+        "ORCHESTRATOR: Final verification on integration branch",
+        "ORCHESTRATOR: If FAIL → abort and report",
+        "ORCHESTRATOR: Preserve history:",
+        "  - git tag acis/history/BATCH-{WO}-{NNN} acis/integrate-{WO}-{NNN}",
+        "  - For each goal: git tag acis/archive/{goal-id} acis/{goal-id}",
+        "ORCHESTRATOR: Squash merge to main (unless --skip-squash):",
+        "  - git checkout main",
+        "  - git merge --squash acis/integrate-{WO}-batch-{NNN}",
+        "  - git commit with batch summary message",
+        "ORCHESTRATOR: Cleanup:",
+        "  - For complete goals: git worktree remove, git branch -d",
+        "  - For failed/partial goals: preserve worktree for debugging",
+        "  - git branch -d integration branch",
+        "ORCHESTRATOR: Generate reports:",
+        "  - ${config.paths.mergeReports}/BATCH-{WO}-{NNN}-report.json",
+        "  - ${config.paths.mergeReports}/BATCH-{WO}-{NNN}-report.md",
+        "ORCHESTRATOR: Update goal status → 'achieved'",
+        "ORCHESTRATOR: Release lock file"
+      ],
+      "outputs": ["squashCommit", "cleanupComplete", "mergeReport"],
+      "timeout_minutes": 10
+    }
+  ],
+
+  "completion_criteria": {
+    "all_required": [
+      "batch_state_created",
+      "worktrees_setup_complete",
+      "all_goals_executed_or_failed",
+      "integration_merge_attempted",
+      "merge_report_generated"
+    ],
+    "success_conditions": [
+      "At least one goal achieved",
+      "Main branch squash successful OR --skip-squash",
+      "No unresolved critical conflicts"
+    ]
+  },
+
+  "escalation": {
+    "on_conflict": {
+      "trivial": "auto_resolve",
+      "partial": "cherry_pick_and_new_goal",
+      "semantic": "preserve_and_flag",
+      "unresolvable": "abort_goal_preserve_work"
+    },
+    "on_verification_failure": {
+      "action": "bisect_to_find_cause",
+      "preserve": "worktree_and_branch"
+    },
+    "on_test_failure": "flag_and_report",
+    "max_retries_per_step": 2,
+    "max_retries_per_goal": 3
+  },
+
+  "integration": {
+    "triggers": "/acis:remediate-parallel",
+    "reports_to": "/acis:status",
+    "related_commands": [
+      "/acis:remediate",
+      "/acis:verify",
+      "/acis:status"
+    ]
+  },
+
+  "defaults": {
+    "max_parallel_worktrees": 4,
+    "max_files_per_step": 3,
+    "history_retention_days": 30,
+    "push_branches": false,
+    "skip_squash": false,
+    "preserve_failed_worktrees": true
+  }
+}

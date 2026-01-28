@@ -1,0 +1,286 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "step-manifest.schema.json",
+  "title": "ACIS Goal Step Manifest",
+  "description": "Schema for decomposing goals into atomic steps with tight commit tracking",
+  "type": "object",
+  "required": ["goal_id", "steps"],
+  "properties": {
+    "goal_id": {
+      "type": "string",
+      "description": "Parent goal identifier"
+    },
+    "batch_id": {
+      "type": "string",
+      "description": "Parent batch identifier (if part of parallel batch)"
+    },
+    "decomposition_strategy": {
+      "type": "string",
+      "enum": ["by_file", "by_module", "by_pattern", "by_severity", "custom"],
+      "default": "by_file",
+      "description": "Strategy used to decompose goal into steps"
+    },
+    "max_files_per_step": {
+      "type": "integer",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Maximum files that can be modified in a single step"
+    },
+    "verification_mode": {
+      "type": "string",
+      "enum": ["after_each_step", "after_each_file", "batch"],
+      "default": "after_each_step",
+      "description": "When to run verification"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of atomic steps",
+      "items": {
+        "type": "object",
+        "required": ["step_id", "action", "description"],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "pattern": "^[A-Z0-9-]+-S[0-9]{2}$",
+            "description": "Step identifier (e.g., WO63-CRIT-001-S01)"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Execution order (1-based)"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["detect", "analyze", "fix", "test", "verify", "cleanup"],
+            "description": "Type of action for this step"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what this step does"
+          },
+          "scope": {
+            "type": "object",
+            "description": "What this step operates on",
+            "properties": {
+              "files": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Specific files to modify"
+              },
+              "modules": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Module/directory paths"
+              },
+              "patterns": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Pattern matches to address"
+              },
+              "line_ranges": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "file": { "type": "string" },
+                    "start": { "type": "integer" },
+                    "end": { "type": "integer" }
+                  }
+                },
+                "description": "Specific line ranges in files"
+              }
+            }
+          },
+          "verification": {
+            "type": "object",
+            "description": "How to verify step success",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Shell command to run for verification"
+              },
+              "expected_before": {
+                "description": "Expected value before step execution"
+              },
+              "expected_after": {
+                "description": "Expected value after step execution"
+              },
+              "comparison": {
+                "type": "string",
+                "enum": ["eq", "lt", "lte", "gt", "gte", "contains", "not_contains"],
+                "default": "eq",
+                "description": "How to compare actual vs expected"
+              },
+              "tolerance": {
+                "type": "number",
+                "default": 0,
+                "description": "Allowed deviation for numeric comparisons"
+              }
+            }
+          },
+          "commit": {
+            "type": "object",
+            "description": "Commit configuration for this step",
+            "properties": {
+              "message_template": {
+                "type": "string",
+                "default": "[${step_id}] ${action}: ${description}",
+                "description": "Template for commit message"
+              },
+              "include_metrics": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include before/after metrics in commit message"
+              },
+              "co_authors": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Co-author lines for commit"
+              }
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Step IDs that must complete before this step"
+          },
+          "rollback": {
+            "type": "object",
+            "description": "How to rollback if step fails",
+            "properties": {
+              "strategy": {
+                "type": "string",
+                "enum": ["git_reset", "git_revert", "manual"],
+                "default": "git_reset",
+                "description": "Rollback strategy"
+              },
+              "commands": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Custom rollback commands (for manual strategy)"
+              }
+            }
+          },
+          "retry": {
+            "type": "object",
+            "description": "Retry configuration",
+            "properties": {
+              "max_attempts": {
+                "type": "integer",
+                "default": 2,
+                "minimum": 1
+              },
+              "on_failure": {
+                "type": "string",
+                "enum": ["retry", "skip", "abort"],
+                "default": "abort"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "complete", "failed", "skipped"],
+            "default": "pending"
+          }
+        }
+      }
+    },
+    "execution_state": {
+      "type": "object",
+      "description": "Current execution state",
+      "properties": {
+        "current_step": {
+          "type": "string",
+          "description": "Currently executing step ID"
+        },
+        "steps_completed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step IDs that completed successfully"
+        },
+        "steps_failed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step IDs that failed"
+        },
+        "steps_skipped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step IDs that were skipped"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "commits": {
+          "type": "array",
+          "description": "Commit history for completed steps",
+          "items": {
+            "type": "object",
+            "required": ["step_id", "commit_hash"],
+            "properties": {
+              "step_id": { "type": "string" },
+              "commit_hash": { "type": "string" },
+              "committed_at": { "type": "string", "format": "date-time" },
+              "message": { "type": "string" },
+              "metric_before": {},
+              "metric_after": {},
+              "files_changed": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "insertions": { "type": "integer" },
+              "deletions": { "type": "integer" }
+            }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "description": "Errors encountered during execution",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step_id": { "type": "string" },
+              "error": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "attempt": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Execution summary",
+      "properties": {
+        "total_steps": { "type": "integer" },
+        "completed_steps": { "type": "integer" },
+        "failed_steps": { "type": "integer" },
+        "skipped_steps": { "type": "integer" },
+        "total_files_modified": { "type": "integer" },
+        "total_commits": { "type": "integer" },
+        "metric_improvement": {
+          "type": "object",
+          "properties": {
+            "before": {},
+            "after": {},
+            "target": {}
+          }
+        }
+      }
+    }
+  }
+}

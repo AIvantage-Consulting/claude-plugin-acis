@@ -10,6 +10,9 @@ A Claude Plugin for decision-oriented discovery, behavioral TDD remediation, and
 - **Multi-Perspective Discovery** - 10+ agents analyze in parallel
 - **Behavioral TDD** - Persona-driven acceptance tests before code
 - **Consensus Verification** - Independent metric verification with veto power
+- **Parallel Remediation** (`/acis remediate-parallel`) - Worktree-isolated parallel goal execution
+- **Trust but Re-verify** - Smart duplicate detection with TTL and change detection
+- **Quality Gate** - Codex code review before marking goals achieved
 - **Process Auditor** (`/acis audit`) - Pattern analysis and dynamic skill generation
 - **Three-Loop Architecture** - Process → Discovery → Remediation loops
 
@@ -129,6 +132,7 @@ Analyzes completed remediations, extracts patterns into skills, improves ACIS it
 | `/acis extract <PR>` | Extract goals from PR review comments |
 | `/acis resolve <manifest>` | Resolve pending decisions |
 | `/acis remediate <goal-file>` | Full TDD remediation pipeline |
+| `/acis remediate-parallel <goals>` | Parallel remediation with worktree isolation |
 | `/acis verify <goal-file>` | Run consensus verification only |
 | `/acis audit` | Process Auditor (pattern analysis, skill generation) |
 
@@ -238,6 +242,41 @@ acis/
 
 - Claude Code CLI
 - MCP server: `codex` (optional, for deep analysis)
+
+## Version History
+
+### v2.3.0 (2026-01-28)
+- **Parallel Remediation**: Worktree-isolated parallel goal execution with integration branch merge
+  - File-disjointness verification before parallelization
+  - Atomic step commits for fine-grained rollback
+  - Hybrid conflict resolution (trivial/partial/semantic/unresolvable)
+  - History preservation via tags before squash to main
+- New schemas: `parallel-batch`, `step-manifest`, `merge-report`
+- New command: `/acis remediate-parallel`
+- New ralph profile: `parallel-remediation.json`
+
+### v2.2.0 (2026-01-27)
+- **Trust but Re-verify**: Smart duplicate detection for `/acis extract`
+  - TTL-based re-verification (14-60 days based on confidence)
+  - Git change detection triggers mandatory re-check
+  - 10% random spot-check sampling
+- **Quality Gate**: Codex code review before marking goals achieved
+- **Stuck Consultation**: Codex problem-solving after 4+ iterations
+- **Complexity-only Estimation**: Tier 1/2/3 (no time estimates)
+- Known resolutions registry for intentional exceptions
+
+### v2.1.0 (2026-01-22)
+- **Path Validation**: Enforce relative paths, prevent `..` traversal
+- **Hook Installation**: Runtime path validation hooks
+- **Artifact Taxonomy**: Structured directory organization
+
+### v2.0.0 (2026-01-19)
+- Initial plugin release
+- Three-loop architecture (Process → Discovery → Remediation)
+- Multi-perspective discovery with 10+ agents
+- Behavioral TDD with persona-driven tests
+- Consensus verification with veto power
+- Process Auditor with dynamic skill generation
 
 ## License
 
