@@ -241,10 +241,22 @@ acis/
 
 ## Requirements
 
-- Claude Code CLI
+- Claude Code CLI (v2.1.19+ for swarm orchestration)
 - MCP server: `codex` (optional, for deep analysis)
 
 ## Version History
+
+### v2.5.0 (2026-01-30)
+- **Swarm Orchestration**: Multi-agent coordination using Claude Code's TeammateTool
+  - Persistent agent teams with inbox-based communication
+  - Self-organizing task queues with auto-dependency management
+  - Graceful shutdown protocols with heartbeat monitoring
+  - Fallback to Task tool when TeammateTool unavailable
+- New skill: `skills/swarm-orchestration/SKILL.md`
+- New ralph profile: `swarm-remediation.json`
+- New flag: `--swarm` for `/acis remediate-parallel`
+- Migration guide: `docs/MIGRATION_FROM_LOCAL.md`
+- Requires Claude Code v2.1.19+ for full swarm features
 
 ### v2.4.0 (2026-01-28)
 - **ACIS Traces / Observability**: Dual-purpose tracing for user visibility and Process Auditor learning

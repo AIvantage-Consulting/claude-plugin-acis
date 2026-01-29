@@ -1,0 +1,283 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "profile": "swarm-remediation",
+  "version": "2.5.0",
+  "description": "Multi-agent swarm orchestration for parallel goal remediation using TeammateTool",
+  "purpose": "Execute multiple goals using persistent agent teams with inbox-based coordination, auto-dependency management, and graceful shutdown",
+  "requires": {
+    "claude_code_version": "2.1.19+",
+    "tool": "TeammateTool",
+    "fallback": "parallel-remediation.json (Task-based)"
+  },
+
+  "trigger": {
+    "type": "command",
+    "commands": [
+      "/acis remediate-parallel --swarm",
+      "/acis:remediate-parallel --swarm"
+    ]
+  },
+
+  "feature_detection": {
+    "method": "Teammate({ operation: 'discoverTeams' })",
+    "on_success": "Use swarm orchestration",
+    "on_failure": "Fall back to parallel-remediation.json profile"
+  },
+
+  "context_management": {
+    "pattern": "persistent-team-workers",
+    "orchestrator_budget": "15%",
+    "worker_coordination": "Inbox messages + Task dependencies",
+    "state_files": {
+      "team_config": "~/.claude/teams/acis-{batch-id}/config.json",
+      "leader_inbox": "~/.claude/teams/acis-{batch-id}/inboxes/orchestrator.json",
+      "worker_inboxes": "~/.claude/teams/acis-{batch-id}/inboxes/{worker}.json",
+      "task_list": "~/.claude/tasks/acis-{batch-id}/*.json",
+      "acis_state": "${config.paths.parallel}/BATCH-{WO}-{NNN}.json"
+    }
+  },
+
+  "phases": [
+    {
+      "name": "TEAM-SETUP",
+      "order": 0,
+      "description": "Create swarm team and analyze goals for task creation",
+      "actions": [
+        "ORCHESTRATOR: Verify TeammateTool availability",
+        "ORCHESTRATOR: If unavailable → switch to parallel-remediation.json",
+        "ORCHESTRATOR: Teammate({ operation: 'spawnTeam', team_name: 'acis-{batch-id}' })",
+        "ORCHESTRATOR: Load all goal files from ${config.paths.goals}/",
+        "ORCHESTRATOR: Build conflict matrix (same as parallel-remediation)",
+        "ORCHESTRATOR: Present swarm plan to user with worker allocation",
+        "ORCHESTRATOR: Wait for confirmation (unless --yes)"
+      ],
+      "outputs": ["teamCreated", "swarmPlan", "workerAllocation"],
+      "timeout_minutes": 5
+    },
+    {
+      "name": "TASK-CREATION",
+      "order": 1,
+      "description": "Create tasks with dependencies for each goal's MEASURE → FIX → VERIFY cycle",
+      "per_goal": true,
+      "actions": [
+        "ORCHESTRATOR: For each goal, create task pipeline:",
+        "  TaskCreate({ subject: 'MEASURE {goal-id}', description: 'Run detection command' })",
+        "  TaskCreate({ subject: 'FIX {goal-id}', description: 'Apply 5-Whys fix' })",
+        "  TaskCreate({ subject: 'VERIFY {goal-id}', description: 'Confirm target met' })",
+        "  TaskCreate({ subject: 'QUALITY-GATE {goal-id}', description: 'Code review' })",
+        "ORCHESTRATOR: Set up dependencies:",
+        "  TaskUpdate({ taskId: 'FIX', addBlockedBy: ['MEASURE'] })",
+        "  TaskUpdate({ taskId: 'VERIFY', addBlockedBy: ['FIX'] })",
+        "  TaskUpdate({ taskId: 'QUALITY-GATE', addBlockedBy: ['VERIFY'] })"
+      ],
+      "outputs": ["taskPipeline", "dependencyGraph"],
+      "timeout_minutes": 2
+    },
+    {
+      "name": "WORKER-SPAWN",
+      "order": 2,
+      "description": "Spawn specialized workers into the team",
+      "actions": [
+        "ORCHESTRATOR: Spawn workers in SINGLE message (parallel):",
+        "",
+        "// Measurement workers",
+        "Task({",
+        "  team_name: 'acis-{batch-id}',",
+        "  name: 'measurer-{n}',",
+        "  subagent_type: 'acis:acis-verify-agent',",
+        "  prompt: 'Claim MEASURE tasks. Run detection commands. Report to orchestrator.',",
+        "  run_in_background: true",
+        "})",
+        "",
+        "// Fix workers (one per disjoint goal set)",
+        "Task({",
+        "  team_name: 'acis-{batch-id}',",
+        "  name: 'fixer-{n}',",
+        "  subagent_type: 'acis:acis-fix-agent',",
+        "  prompt: 'Claim FIX tasks when unblocked. Apply 5-Whys, implement fix.',",
+        "  run_in_background: true",
+        "})",
+        "",
+        "// Verification workers",
+        "Task({",
+        "  team_name: 'acis-{batch-id}',",
+        "  name: 'verifier-{n}',",
+        "  subagent_type: 'acis:acis-verify-agent',",
+        "  prompt: 'Claim VERIFY tasks when unblocked. Confirm metric meets target.',",
+        "  run_in_background: true",
+        "})"
+      ],
+      "worker_types": {
+        "measurer": {
+          "agent": "acis:acis-verify-agent",
+          "tasks": ["MEASURE"],
+          "max_instances": 2
+        },
+        "fixer": {
+          "agent": "acis:acis-fix-agent",
+          "tasks": ["FIX"],
+          "max_instances": 4
+        },
+        "verifier": {
+          "agent": "acis:acis-verify-agent",
+          "tasks": ["VERIFY", "QUALITY-GATE"],
+          "max_instances": 2
+        }
+      },
+      "outputs": ["workersSpawned", "workerRegistry"],
+      "timeout_minutes": 5
+    },
+    {
+      "name": "SWARM-EXECUTION",
+      "order": 3,
+      "description": "Workers self-organize to claim and complete tasks",
+      "execution_model": "self-organizing-swarm",
+      "worker_behavior": [
+        "1. Call TaskList() to see available tasks",
+        "2. Find task with status 'pending', no owner, not blocked",
+        "3. Claim: TaskUpdate({ taskId, owner: $CLAUDE_CODE_AGENT_NAME })",
+        "4. Execute: TaskUpdate({ taskId, status: 'in_progress' })",
+        "5. Do the work (MEASURE/FIX/VERIFY based on task type)",
+        "6. Complete: TaskUpdate({ taskId, status: 'completed' })",
+        "7. Report: Teammate({ operation: 'write', target: 'orchestrator', value: findings })",
+        "8. Repeat until no tasks remain"
+      ],
+      "orchestrator_behavior": [
+        "Monitor leader inbox for worker reports",
+        "Track task completion via TaskList()",
+        "Handle stuck workers (no progress for 10 min)",
+        "Handle failed tasks (reassign to other workers)",
+        "Update ACIS state file with progress"
+      ],
+      "auto_dependency_management": {
+        "description": "Tasks auto-unblock when dependencies complete",
+        "example": "When MEASURE completes → FIX auto-unblocks → worker claims it"
+      },
+      "outputs": ["taskCompletions", "workerReports", "progressUpdates"],
+      "timeout_minutes": 60
+    },
+    {
+      "name": "CONSENSUS-SYNTHESIS",
+      "order": 4,
+      "description": "Synthesize worker reports into final verification",
+      "actions": [
+        "ORCHESTRATOR: Read all worker reports from inbox",
+        "ORCHESTRATOR: For each goal:",
+        "  - Verify MEASURE → FIX → VERIFY → QUALITY-GATE all completed",
+        "  - Check final verification result (PASS/FAIL)",
+        "  - If PASS → mark goal ACHIEVED",
+        "  - If FAIL → create new remediation goal or escalate",
+        "ORCHESTRATOR: Generate batch summary report"
+      ],
+      "outputs": ["goalStatuses", "batchSummary"],
+      "timeout_minutes": 10
+    },
+    {
+      "name": "GRACEFUL-SHUTDOWN",
+      "order": 5,
+      "description": "Shutdown workers and cleanup team resources",
+      "actions": [
+        "ORCHESTRATOR: For each active worker:",
+        "  Teammate({ operation: 'requestShutdown', target_agent_id: worker })",
+        "ORCHESTRATOR: Wait for all shutdown_approved messages (5 min timeout)",
+        "ORCHESTRATOR: Handle unresponsive workers (force cleanup after timeout)",
+        "ORCHESTRATOR: Teammate({ operation: 'cleanup' })",
+        "ORCHESTRATOR: Generate final report to ${config.paths.mergeReports}/",
+        "ORCHESTRATOR: Update ACIS state to 'completed'"
+      ],
+      "outputs": ["shutdownComplete", "finalReport"],
+      "timeout_minutes": 10
+    }
+  ],
+
+  "completion_criteria": {
+    "all_required": [
+      "team_created",
+      "tasks_created_with_dependencies",
+      "workers_spawned",
+      "all_tasks_completed_or_failed",
+      "graceful_shutdown_complete"
+    ],
+    "success_conditions": [
+      "At least one goal achieved",
+      "All workers shut down gracefully",
+      "Final report generated"
+    ]
+  },
+
+  "escalation": {
+    "on_teammate_unavailable": {
+      "action": "fallback_to_parallel_remediation",
+      "message": "TeammateTool not available, using Task-based parallel remediation"
+    },
+    "on_worker_stuck": {
+      "timeout_minutes": 10,
+      "action": "reassign_task_to_other_worker"
+    },
+    "on_worker_crash": {
+      "heartbeat_timeout_minutes": 5,
+      "action": "respawn_worker_or_escalate"
+    },
+    "on_task_failure": {
+      "max_retries": 2,
+      "action": "create_new_goal_for_investigation"
+    }
+  },
+
+  "message_protocols": {
+    "worker_to_orchestrator": {
+      "task_complete": {
+        "type": "task_completed",
+        "taskId": "{id}",
+        "taskSubject": "{subject}",
+        "result": "PASS|FAIL",
+        "details": "{findings}"
+      },
+      "blocker": {
+        "type": "blocker",
+        "taskId": "{id}",
+        "reason": "{description}",
+        "needsHelp": true
+      }
+    },
+    "orchestrator_to_worker": {
+      "priority_change": {
+        "type": "priority",
+        "taskId": "{id}",
+        "newPriority": "high|normal|low"
+      },
+      "abort": {
+        "type": "abort",
+        "taskId": "{id}",
+        "reason": "{description}"
+      }
+    }
+  },
+
+  "integration": {
+    "triggers": "/acis:remediate-parallel --swarm",
+    "fallback": "/acis:remediate-parallel (parallel-remediation.json)",
+    "reports_to": "/acis:status",
+    "related_profiles": [
+      "parallel-remediation.json",
+      "behavioral-tdd.json"
+    ]
+  },
+
+  "defaults": {
+    "max_workers": 8,
+    "workers_per_goal": 1,
+    "heartbeat_timeout_minutes": 5,
+    "task_timeout_minutes": 30,
+    "auto_cleanup": true,
+    "preserve_failed_tasks": true
+  },
+
+  "flags": {
+    "--swarm": "Enable swarm orchestration (requires TeammateTool)",
+    "--workers=N": "Override max workers (default: 8)",
+    "--no-fallback": "Fail if TeammateTool unavailable (don't use Task fallback)",
+    "--backend=TYPE": "Force backend: auto, tmux, iterm2, in-process",
+    "--visible": "Use tmux/iterm2 for visible worker panes"
+  }
+}

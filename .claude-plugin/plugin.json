@@ -1,7 +1,7 @@
 {
   "name": "acis",
-  "version": "2.4.0",
-  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Parallel Remediation, Observability Traces, and Consensus verification",
+  "version": "2.5.0",
+  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
   "author": {
     "name": "AIvantage Consulting Inc",
     "url": "https://aivantage-consulting.com"
@@ -17,6 +17,8 @@
     "ai-governance",
     "project-bootstrap",
     "multi-agent",
-    "consensus-verification"
+    "consensus-verification",
+    "swarm-orchestration",
+    "teammatetool"
   ]
 }

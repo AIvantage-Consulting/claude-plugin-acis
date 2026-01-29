@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "profile": "behavioral-tdd",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Loop 3 (Innermost): Surgical problem-solving with behavioral TDD using fresh agents, quality gates, and stuck consultation",
   "purpose": "Targeted remediation of individual goals using RED → GREEN → VERIFY → QUALITY GATE cycle with fresh context per iteration",
 

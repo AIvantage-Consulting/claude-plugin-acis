@@ -1,8 +1,8 @@
 # ACIS User Guide
 
-## Automated Code Improvement System v2.4
+## Automated Code Improvement System v2.5
 
-ACIS is an LLM-powered system that transforms PR review comments into quantifiable, trackable remediation goals. The system features **decision-oriented discovery**, **dual-CEO validation**, **behavioral TDD**, **parallel remediation**, **quality gates**, and **observability traces**.
+ACIS is an LLM-powered system that transforms PR review comments into quantifiable, trackable remediation goals. The system features **decision-oriented discovery**, **dual-CEO validation**, **behavioral TDD**, **parallel remediation**, **swarm orchestration**, **quality gates**, and **observability traces**.
 
 ---
 
@@ -22,13 +22,14 @@ ACIS is an LLM-powered system that transforms PR review comments into quantifiab
 12. [Consensus Verification](#consensus-verification)
 13. [Quality Gate](#quality-gate)
 14. [Parallel Remediation](#parallel-remediation)
-15. [ACIS Traces](#acis-traces)
-16. [Goal File Structure](#goal-file-structure)
-17. [Independently Verifiable Metrics](#independently-verifiable-metrics)
-18. [Complexity Tiers](#complexity-tiers)
-19. [Safety Rules](#safety-rules)
-20. [Examples](#examples)
-21. [Codex Integration](#codex-integration)
+15. [Swarm Orchestration](#swarm-orchestration)
+16. [ACIS Traces](#acis-traces)
+17. [Goal File Structure](#goal-file-structure)
+18. [Independently Verifiable Metrics](#independently-verifiable-metrics)
+19. [Complexity Tiers](#complexity-tiers)
+20. [Safety Rules](#safety-rules)
+21. [Examples](#examples)
+22. [Codex Integration](#codex-integration)
 
 ---
 
@@ -56,6 +57,21 @@ ACIS (Automated Code Improvement System) is a structured workflow for:
 ---
 
 ## Version History
+
+### v2.5.0 - Swarm Orchestration (2026-01-30)
+
+**Multi-agent coordination using Claude Code's TeammateTool:**
+
+| Feature | Description |
+|---------|-------------|
+| TeammateTool integration | Persistent agent teams with inbox-based communication |
+| Self-organizing swarms | Workers claim tasks from shared queue automatically |
+| Task dependencies | Auto-unblocking when dependencies complete |
+| Graceful shutdown | Heartbeat monitoring with proper cleanup protocols |
+| `--swarm` flag | Enable swarm mode for `/acis remediate-parallel` |
+| Fallback support | Uses Task tool when TeammateTool unavailable |
+
+**Requirements:** Claude Code v2.1.19+ for full swarm features.
 
 ### v2.4.0 - ACIS Traces (2026-01-28)
 
@@ -1227,6 +1243,138 @@ To recover detailed history:
 ```bash
 git log acis/history/BATCH-WO63-001
 ```
+
+---
+
+## Swarm Orchestration
+
+### Overview
+
+Swarm orchestration uses Claude Code's **TeammateTool** to coordinate persistent agent teams for parallel remediation and discovery tasks.
+
+**Requirements:** Claude Code v2.1.19+ for TeammateTool. Falls back to Task tool when unavailable.
+
+### Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Team** | Named group of agents with one leader (orchestrator) |
+| **Teammate** | Persistent agent with inbox for receiving messages |
+| **Task Queue** | Shared work items with status and dependencies |
+| **Inbox** | JSON file for inter-agent communication |
+
+### Enabling Swarm Mode
+
+```bash
+# Use --swarm flag with remediate-parallel
+/acis remediate-parallel docs/reviews/goals/*.json --swarm
+
+# Force specific backend (tmux for visible panes)
+/acis remediate-parallel docs/reviews/goals/*.json --swarm --backend=tmux
+```
+
+### Swarm vs Task-Based Parallel
+
+| Feature | Task-Based (v2.3) | Swarm (v2.5) |
+|---------|-------------------|--------------|
+| Agent lifespan | Ephemeral | Persistent |
+| Communication | State files | Inbox messages |
+| Dependencies | Manual polling | Auto-unblocking |
+| Visibility | Background | tmux/iTerm panes |
+| Shutdown | Automatic | Graceful protocol |
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ORCHESTRATOR (Leader)                     │
+│  - Creates team and task queue                              │
+│  - Spawns specialist workers                                │
+│  - Monitors inbox for reports                               │
+│  - Synthesizes results                                      │
+│  - Initiates graceful shutdown                              │
+└─────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   MEASURER      │  │     FIXER       │  │   VERIFIER      │
+│  - Claims       │  │  - Claims FIX   │  │  - Claims       │
+│    MEASURE      │  │    tasks when   │  │    VERIFY tasks │
+│    tasks        │  │    unblocked    │  │    when ready   │
+│  - Runs         │  │  - Applies      │  │  - Confirms     │
+│    detection    │  │    5-Whys fix   │  │    target met   │
+│  - Reports      │  │  - Reports      │  │  - Reports      │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### Task Dependencies
+
+Tasks auto-unblock when dependencies complete:
+
+```
+MEASURE (task #1)           ← Worker claims, completes
+    │
+    ▼ (auto-unblocks)
+FIX (task #2)               ← Worker claims when #1 done
+    │
+    ▼ (auto-unblocks)
+VERIFY (task #3)            ← Worker claims when #2 done
+    │
+    ▼ (auto-unblocks)
+QUALITY-GATE (task #4)      ← Worker claims when #3 done
+```
+
+### Self-Organizing Behavior
+
+Workers follow this loop:
+1. Call `TaskList()` to see available tasks
+2. Find pending task with no owner, not blocked
+3. Claim task (set owner)
+4. Execute task
+5. Mark complete
+6. Report to orchestrator
+7. Repeat until no tasks remain
+
+### Visibility Backends
+
+| Backend | Command | When Used |
+|---------|---------|-----------|
+| `in-process` | `--backend=in-process` | Default, fastest, invisible |
+| `tmux` | `--backend=tmux` | Inside tmux, visible panes |
+| `iterm2` | `--backend=iterm2` | iTerm2 on macOS, visible panes |
+| `auto` | (default) | Auto-detect based on environment |
+
+### Graceful Shutdown
+
+```javascript
+// Orchestrator sends shutdown request
+Teammate({ operation: "requestShutdown", target_agent_id: "worker-1" })
+
+// Worker acknowledges before exiting
+Teammate({ operation: "approveShutdown", request_id: "shutdown-123" })
+
+// After all approvals, orchestrator cleans up
+Teammate({ operation: "cleanup" })
+```
+
+### Configuration
+
+Add to `.acis-config.json`:
+
+```json
+{
+  "swarm": {
+    "enabled": true,
+    "fallbackToTask": true,
+    "maxParallelWorkers": 4,
+    "backend": "auto"
+  }
+}
+```
+
+### Fallback Mode
+
+When TeammateTool is unavailable (Claude Code < v2.1.19), ACIS automatically falls back to Task-based parallel remediation with state file coordination.
 
 ---
 
