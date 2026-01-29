@@ -1,15 +1,15 @@
 # ACIS User Guide
 
-## Automated Code Improvement System v2.1
+## Automated Code Improvement System v2.4
 
-ACIS is an LLM-powered system that transforms PR review comments into quantifiable, trackable remediation goals. Version 2.1 introduces **decision-oriented discovery**, **dual-CEO validation**, and **decision manifests** that bind AI-generated code to explicit decisions.
+ACIS is an LLM-powered system that transforms PR review comments into quantifiable, trackable remediation goals. The system features **decision-oriented discovery**, **dual-CEO validation**, **behavioral TDD**, **parallel remediation**, **quality gates**, and **observability traces**.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [What's New in v2.1](#whats-new-in-v21)
+2. [Version History](#version-history)
 3. [How ACIS Works](#how-acis-works)
 4. [Using ACIS Commands](#using-acis-commands)
 5. [Decision-Oriented Discovery](#decision-oriented-discovery)
@@ -20,12 +20,15 @@ ACIS is an LLM-powered system that transforms PR review comments into quantifiab
 10. [Ralph-Loop Remediation](#ralph-loop-remediation)
 11. [Multi-Perspective 5 Whys](#multi-perspective-5-whys)
 12. [Consensus Verification](#consensus-verification)
-13. [Goal File Structure](#goal-file-structure)
-14. [Independently Verifiable Metrics](#independently-verifiable-metrics)
-15. [Complexity Tiers](#complexity-tiers)
-16. [Safety Rules](#safety-rules)
-17. [Examples](#examples)
-18. [Codex Integration](#codex-integration)
+13. [Quality Gate](#quality-gate)
+14. [Parallel Remediation](#parallel-remediation)
+15. [ACIS Traces](#acis-traces)
+16. [Goal File Structure](#goal-file-structure)
+17. [Independently Verifiable Metrics](#independently-verifiable-metrics)
+18. [Complexity Tiers](#complexity-tiers)
+19. [Safety Rules](#safety-rules)
+20. [Examples](#examples)
+21. [Codex Integration](#codex-integration)
 
 ---
 
@@ -52,43 +55,69 @@ ACIS (Automated Code Improvement System) is a structured workflow for:
 
 ---
 
-## What's New in v2.1
+## Version History
 
-### v2.0 → v2.1 Comparison
+### v2.4.0 - ACIS Traces (2026-01-28)
 
-| Feature | v2.0 | v2.1 |
-|---------|------|------|
-| Investigation | Reactive (PR-triggered) | Proactive (`/acis discovery`) |
-| Decisions | Implicit, fragmented | Explicit, manifest-bound |
-| Recommendations | Single agent | Dual-CEO (Codex + Claude) |
-| Resolution | Manual only | Auto-approve if CEOs converge |
-| Value Framing | Technical | End-user & Operations oriented |
-| Dependencies | Not tracked | Dependency/tradeoff maps |
-| Tests | Per-goal | Per-decision formal specs |
+**Observability for user visibility and Process Auditor learning:**
 
-### New Commands
-
-| Command | Description |
+| Feature | Description |
 |---------|-------------|
-| `/acis discovery "<topic>"` | Proactive investigation with decision surfacing |
-| `/acis resolve <manifest>` | Auto-resolve converged decisions, prompt for diverged |
+| User-visible traces | `[ACIS:{loop}:{phase}]` prefix format for execution visibility |
+| Structured traces | JSON-based traces for micro-decisions, knowledge gaps, skill applications |
+| Trace types | lifecycle, decision, knowledge, skill, effectiveness, blocker |
+| Dual storage | Project traces (`docs/acis/traces/`) and process traces (`.acis/traces/`) |
+| Process Auditor integration | Traces consumed as hints for pattern detection and skill generation |
 
-### New Flags
+### v2.3.0 - Parallel Remediation (2026-01-28)
 
-| Flag | Description |
-|------|-------------|
-| `--type <type>` | Discovery type: feature, refactor, audit, what-if, bug-hunt |
-| `--depth <level>` | Investigation depth: shallow, medium, deep |
-| `--manifest <file>` | Bind remediation to decision manifest |
-| `--auto-only` | Only auto-approve converged decisions |
-| `--force <id>` | Force resolution of specific decision |
-| `--deep-5whys` | Force Multi-Perspective 5 Whys for every fix |
+**Worktree-isolated parallel goal execution:**
 
-### Core Concept: Why Decision-Oriented?
+| Feature | Description |
+|---------|-------------|
+| `/acis remediate-parallel` | New command for parallel goal remediation |
+| Git worktree isolation | Each goal runs in isolated worktree protecting baseline |
+| File-disjointness verification | Checks for file conflicts before parallelization |
+| Atomic step commits | Fine-grained rollback capability |
+| Integration branch merge | Sequential merge with conflict classification |
+| History preservation | Tags archive work before squash to main |
 
-**Problem**: AI-generated code is often poor quality because macro/micro decisions are made implicitly and fragmented across files.
+### v2.2.0 - Quality Gate & Trust-but-Re-verify (2026-01-27)
 
-**Solution**: ACIS v2.1 surfaces all decisions BEFORE implementation, creating a binding manifest that enforces coherent, discipline-bound code generation.
+**External code review and smart duplicate detection:**
+
+| Feature | Description |
+|---------|-------------|
+| Quality Gate | Codex code review before marking goals achieved |
+| Stuck Consultation | Codex problem-solving after 4+ stuck iterations |
+| Trust but Re-verify | TTL-based re-verification (14-60 days based on confidence) |
+| Change detection | Git change detection triggers mandatory re-check |
+| Spot-check sampling | 10% random verification of previously achieved goals |
+| Known resolutions registry | Intentional exceptions for verified exceptions |
+
+### v2.1.0 - Decision-Oriented Discovery (2026-01-22)
+
+**Proactive investigation with decision surfacing:**
+
+| Feature | Description |
+|---------|-------------|
+| `/acis discovery` | Proactive investigation before implementation |
+| Dual-CEO Validation | AI-Native + Modern SWE perspectives on decisions |
+| Decision Manifests | Binding documents that enforce coherent code generation |
+| Auto-resolution | Converged CEO recommendations auto-approved |
+| Path Validation | Enforce relative paths, prevent `..` traversal |
+
+### v2.0.0 - Initial Plugin Release (2026-01-19)
+
+**Three-loop architecture with multi-agent consensus:**
+
+| Feature | Description |
+|---------|-------------|
+| Three-loop architecture | Process → Discovery → Remediation loops |
+| Multi-perspective discovery | 10+ agents analyze in parallel |
+| Behavioral TDD | Persona-driven acceptance tests before code |
+| Consensus verification | Independent metric verification with veto power |
+| Process Auditor | Pattern analysis and dynamic skill generation |
 
 ---
 
@@ -973,6 +1002,321 @@ For low-risk changes (Tier 1 complexity):
 
 ---
 
+## Quality Gate
+
+### Overview
+
+The Quality Gate is an external code review phase that runs after metrics are achieved but before marking a goal as complete. It ensures code quality meets standards beyond just passing metrics.
+
+### When Quality Gate Triggers
+
+| Condition | Triggers Quality Gate |
+|-----------|----------------------|
+| Metric achieved | After VERIFY phase returns "achieved" |
+| `--skip-quality-gate` flag | Skipped |
+| `--skip-codex` flag | Skipped |
+| Tier 1 goal with `--skip-tier1-quality-gate` | Skipped |
+
+### Quality Gate Process
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              VERIFY returns status: achieved                  │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     QUALITY GATE                             │
+│                                                              │
+│  1. Generate cumulative diff (all iterations squashed)       │
+│  2. Compile file change summary                              │
+│  3. Delegate to Codex with quality-gate template             │
+│                                                              │
+│  CODEX REVIEW:                                               │
+│  • SOLID principles compliance                               │
+│  • DRY principle adherence                                   │
+│  • Algorithm quality assessment                              │
+│  • Architecture conformance (three-layer)                    │
+│  • Healthcare/HIPAA considerations                           │
+│                                                              │
+│  Returns: APPROVE or REQUEST_CHANGES + quality score         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+            ┌───────────────┴───────────────┐
+            ▼                               ▼
+      ┌──────────┐                   ┌──────────────┐
+      │ APPROVE  │                   │ REQUEST_     │
+      │          │                   │ CHANGES      │
+      │ → ACHIEVED│                  │ → Back to FIX│
+      └──────────┘                   └──────────────┘
+```
+
+### Review Focus Areas
+
+| Area | Criteria |
+|------|----------|
+| **Single Responsibility** | Each unit has one reason to change |
+| **Open/Closed** | Open for extension, closed for modification |
+| **Liskov Substitution** | Subtypes behave as expected |
+| **Interface Segregation** | Minimal, focused interfaces |
+| **Dependency Inversion** | Depend on abstractions |
+| **DRY** | No duplicated logic, constants for magic values |
+| **Architecture** | Foundation → Journey → Composition layer direction |
+
+### Configuration
+
+| Flag | Description |
+|------|-------------|
+| `--skip-quality-gate` | Skip quality gate entirely |
+| `--quality-threshold=N` | Require quality score >= N (default: 3) |
+| `--skip-tier1-quality-gate` | Skip for Tier 1 goals only |
+
+### Max Rejections
+
+After 2 quality gate rejections, the goal escalates to the user for manual review.
+
+---
+
+## Stuck Consultation
+
+### Overview
+
+When a goal is stuck (same metric failing for multiple iterations), ACIS can consult Codex for fresh problem-solving perspective.
+
+### When Stuck Consultation Triggers
+
+| Condition | Triggers Consultation |
+|-----------|----------------------|
+| Iteration count >= stuck_threshold (default: 4) | Yes |
+| Last 3 iterations all not_achieved or partial | Yes |
+| `--skip-codex` flag | Skipped |
+| Recent progress made | Skipped |
+
+### Consultation Process
+
+1. **Compile iteration history** - What was tried and what failed
+2. **Extract 5-WHYS synthesis** - Root cause analysis from all perspectives
+3. **Delegate to Codex** - Problem-solving mode (not review mode)
+4. **Receive guidance** - Alternative approach + implementation guidance
+5. **Apply to next FIX** - Inject guidance into next iteration
+
+### Configuration
+
+| Flag | Description |
+|------|-------------|
+| `--stuck-threshold=N` | Trigger consultation after N iterations (default: 4) |
+| `--force-consultation` | Force consultation regardless of iteration count |
+| `--skip-codex` | Skip all Codex delegations |
+
+### Max Consultations
+
+Maximum 2 consultations per goal. After that, escalate to Loop 2 (Discovery) for re-analysis.
+
+---
+
+## Parallel Remediation
+
+### Overview
+
+`/acis remediate-parallel` enables multiple goals to be remediated simultaneously using git worktrees for isolation. Each goal runs in its own worktree with a dedicated agent, then results are merged via an integration branch.
+
+### Command
+
+```bash
+/acis remediate-parallel --wo WO63 --goals "CRIT-001,CRIT-002,CRIT-003"
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--wo <WO-ID>` | Work order identifier for batch naming |
+| `--goals <list>` | Comma-separated goal IDs or glob pattern |
+| `--dry-run` | Show execution plan without running |
+| `--max-parallel N` | Maximum concurrent worktrees (default: 4) |
+| `--step-size N` | Maximum files per atomic step (default: 3) |
+| `--skip-squash` | Keep detailed commit history on main |
+| `--resume <batch-id>` | Resume interrupted batch |
+| `--force-parallel` | Bypass file conflict warnings |
+
+### Five-Phase Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 0: SAFETY ANALYSIS                                                    │
+│  • Load all goal files                                                       │
+│  • Run detection commands to extract affected files                          │
+│  • Build conflict matrix (file overlap between goals)                        │
+│  • Graph-color to find disjoint parallel groups                              │
+│  • Present plan and wait for confirmation                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: WORKTREE SETUP (per goal)                                          │
+│  • git worktree add .acis-work/{goal-id} -b acis/{goal-id} main              │
+│  • Decompose goal into steps (max 3 files per step)                          │
+│  • Write step manifest to docs/acis/state/steps/{goal-id}/manifest.json      │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 2: PARALLEL EXECUTION (per goal, parallel)                            │
+│  • Each goal runs in its worktree with dedicated agent                       │
+│  • Per-step atomic commits: [WO63-CRIT-001-S01] detect: baseline             │
+│  • Verification after each step                                              │
+│  • Optional push to remote branch                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 3: INTEGRATION MERGE                                                  │
+│  • git checkout -b acis/integrate-{WO}-batch-{NNN} main                      │
+│  • Sequential merge each goal (ordered by priority)                          │
+│  • Conflict classification: trivial → partial → semantic → unresolvable      │
+│  • Post-merge verification with detection commands                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 4: SQUASH TO MAIN + CLEANUP                                           │
+│  • Preserve history with tags: acis/history/BATCH-{WO}-{NNN}                 │
+│  • Squash merge to main (unless --skip-squash)                               │
+│  • Cleanup worktrees for complete goals                                      │
+│  • Generate merge report                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+project/
+├── .acis-work/                    # Worktrees root (git-ignored)
+│   ├── WO63-CRIT-001-key-rotation/   # Goal 1 worktree
+│   ├── WO63-CRIT-002-sync-queue/     # Goal 2 worktree
+│   └── WO63-CRIT-003-phi-audit/      # Goal 3 worktree
+├── docs/acis/
+│   ├── state/
+│   │   ├── steps/
+│   │   │   ├── WO63-CRIT-001/manifest.json
+│   │   │   └── WO63-CRIT-002/manifest.json
+│   │   └── parallel/
+│   │       ├── BATCH-WO63-001.json
+│   │       └── worktree-registry.json
+│   └── merge-reports/
+│       ├── BATCH-WO63-001-report.json
+│       └── BATCH-WO63-001-report.md
+```
+
+### Conflict Resolution
+
+| Conflict Type | Detection | Action |
+|---------------|-----------|--------|
+| **Trivial** | Whitespace, import order only | Auto-resolve with git strategies |
+| **Partial** | Some commits merge, some conflict | Cherry-pick clean commits, new goal for rest |
+| **Semantic** | Logic conflicts between goals | Preserve worktree, attempt rebase, flag if fails |
+| **Unresolvable** | Cannot merge without data loss | Preserve all work, generate report, notify user |
+
+### History Preservation
+
+Before squash to main, history is preserved via tags:
+- `acis/history/BATCH-{WO}-{NNN}` - Integration branch state
+- `acis/archive/{goal-id}` - Individual goal branches
+
+To recover detailed history:
+```bash
+git log acis/history/BATCH-WO63-001
+```
+
+---
+
+## ACIS Traces
+
+### Overview
+
+ACIS Traces provide dual-purpose observability:
+1. **User Visibility**: Plain text traces showing execution progress
+2. **Process Auditor Learning**: Structured traces for pattern detection
+
+### User-Visible Traces
+
+Format: `[ACIS:{loop}:{phase}] {message}`
+
+```
+[ACIS:outer:reflect] Analyzing 5 completed goals for patterns
+[ACIS:middle:discover] Spawning 3 perspective agents in parallel
+[ACIS:inner:5-whys] Security perspective: Root cause identified
+[ACIS:inner:fix] Iteration 2: Applying fix to auth module
+[ACIS:parallel:setup] Creating worktree for WO63-CRIT-001
+```
+
+### Trace Types
+
+| Type | Purpose | Example Data |
+|------|---------|--------------|
+| **lifecycle** | Phase/stage transitions | start, end, spawn, complete |
+| **decision** | Micro-decisions by AI | approach-choice, fix-ordering |
+| **knowledge** | Knowledge gaps/applications | needed, applied, missing |
+| **skill** | Skill usage/candidates | applied, candidate, ineffective |
+| **effectiveness** | Workflow metrics | iterations_to_complete, backtrack_count |
+| **blocker** | Progress blockers | knowledge_gap, dependency, conflict |
+
+### Storage Locations
+
+```
+Project Traces (session-oriented):
+  docs/acis/traces/
+    SESSION-2026-01-28-103000/
+      trace-log.jsonl          # All traces (JSON Lines)
+      summary.md               # Human-readable summary
+
+Process Traces (workflow-oriented):
+  .acis/traces/
+    decisions/                 # Micro-decisions per goal
+    knowledge/                 # Knowledge gaps and applications
+    skills/                    # Skill candidates and usage
+    effectiveness/             # Workflow metrics
+```
+
+### Trace Schema
+
+```json
+{
+  "trace_id": "T-WO63-0015",
+  "timestamp": "2026-01-28T10:35:00Z",
+  "session_id": "SESSION-2026-01-28-103000",
+  "goal_id": "WO63-CRIT-001",
+  "location": {
+    "loop": "inner",
+    "phase": "fix",
+    "iteration": 2
+  },
+  "trace_type": "decision",
+  "message": "Selected singleton pattern for key manager",
+  "decision": {
+    "category": "approach-choice",
+    "decision": "Use singleton pattern for KeyManager",
+    "reasoning": "Ensures single source of truth for key rotation state",
+    "alternatives_considered": ["Factory pattern", "Dependency injection"],
+    "confidence": "high"
+  },
+  "process_auditor_hints": {
+    "pattern_candidate": true,
+    "tags": ["design-pattern", "singleton", "key-management"]
+  }
+}
+```
+
+### Process Auditor Consumption
+
+The Process Auditor reads traces to:
+- **Identify skill candidates**: `process_auditor_hints.skill_candidate: true`
+- **Detect patterns**: Recurring decision approaches
+- **Measure effectiveness**: `effectiveness.assessment` across goals
+- **Find knowledge gaps**: `knowledge.event: "missing"` frequency
+
+---
+
 ## Independently Verifiable Metrics
 
 ### Philosophy
@@ -1188,14 +1532,18 @@ Codex responses feed into:
 
 ## Using ACIS Commands
 
-ACIS provides five slash commands:
+ACIS provides seven slash commands:
 
 | Command | Purpose |
 |---------|---------|
+| `/acis init` | Bootstrap ACIS for a new project |
 | `/acis extract <PR>` | Extract goals from PR review comments |
 | `/acis discovery "<topic>"` | Proactive investigation with decision surfacing |
 | `/acis resolve <manifest>` | Auto-resolve converged decisions |
-| `/acis remediate <goal-file>` | TDD remediation loop |
+| `/acis remediate <goal-file>` | TDD remediation loop (single goal) |
+| `/acis remediate-parallel <goals>` | Parallel remediation with worktree isolation |
+| `/acis verify <goal-file>` | Run consensus verification only |
+| `/acis audit` | Process Auditor (pattern analysis, skill generation) |
 | `/acis status` | Show progress across all goals and manifests |
 
 ### `/acis extract <PR_NUMBER>`
