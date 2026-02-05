@@ -1,6 +1,74 @@
-# ACIS v2.2.0 - Automated Code Improvement System
+# ACIS v2.7.0 - Automated Code Improvement System
 
-You are executing the Automated Code Improvement System (ACIS) v2.2.0 workflow with:
+## First-Use Upgrade Check (Auto-Detect)
+
+**On first use of any `/acis` command in a session**, perform a quick upgrade check:
+
+### Session Marker
+
+```bash
+# Session marker prevents repeated checks
+SESSION_MARKER="/tmp/.acis-upgrade-checked-$(date +%Y%m%d)"
+
+if [ ! -f "$SESSION_MARKER" ]; then
+  # First use today - run upgrade check
+  RUN_UPGRADE_CHECK=true
+  touch "$SESSION_MARKER"
+else
+  RUN_UPGRADE_CHECK=false
+fi
+```
+
+### Quick Upgrade Check (If First Use)
+
+Only runs if `RUN_UPGRADE_CHECK=true`:
+
+```bash
+plugin_version=$(jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null || echo "unknown")
+
+# Check for missing hooks (quick file existence check)
+missing_components=()
+
+if [ ! -f ".claude/hooks/acis-pre-commit-hook.sh" ]; then
+  missing_components+=("pre-commit hook")
+fi
+
+if [ ! -f ".claude/hooks/acis-path-validator.sh" ]; then
+  missing_components+=("path validator hook")
+fi
+
+# Check config version if exists
+if [ -f ".acis-config.json" ]; then
+  config_version=$(jq -r '.acisVersion // "unknown"' .acis-config.json 2>/dev/null || echo "unknown")
+  if [ "$config_version" != "$plugin_version" ] && [ "$config_version" != "unknown" ]; then
+    missing_components+=("config update")
+  fi
+fi
+```
+
+### Display One-Liner (If Upgrade Available)
+
+If `missing_components` is not empty, display a non-intrusive notice:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ ACIS v2.7.0: Upgrade available. Run '/acis upgrade' for new   │
+│ features (pre-commit review, version command).                  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Then continue with the requested command.**
+
+### Behavior Rules
+
+1. **Non-blocking**: Always proceed with the user's command after showing notice
+2. **Once per day**: Session marker uses date, so checks once per day max
+3. **Quick**: Only file existence checks, no heavy operations
+4. **Dismissable**: Users can run `/acis upgrade` to clear the notice permanently
+
+---
+
+You are executing the Automated Code Improvement System (ACIS) v2.7.0 workflow with:
 - **Decision-oriented discovery** (surface macro/micro decisions before implementation)
 - **Dual-CEO validation** (independent recommendations from AI-Native + Modern SWE perspectives)
 - **Multi-perspective discovery** (10+ agents in parallel)
@@ -237,7 +305,10 @@ mcp__codex__codex(prompt="CEO-Beta...", sandbox="read-only")
 | `remediate <goal-file>` | Full pipeline: Discovery → Behavioral TDD → Ralph-Loop → Consensus |
 | `status` | Show progress across all goals and manifests |
 | `verify <goal-file>` | Run consensus verification only |
+| `pre-commit-review` | Quick design review of staged changes before commit |
 | `audit` | Process Auditor: analyze patterns, generate skills, improve ACIS itself |
+| `upgrade` | Check for and install missing ACIS components |
+| `version` | Display installed plugin version |
 
 ## Subcommand Routing
 
@@ -258,6 +329,32 @@ Process Auditor (Loop 1 - Outermost):
 - LEARN: Identify reinforcements, corrections, skill candidates
 - APPLY: Generate skills, apply process improvements
 - DOCUMENT: Generate audit report
+
+### `/acis pre-commit-review`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/pre-commit-review.md`
+
+Quick design review of staged changes:
+- Checks for SOLID violations, layer breaches, coupling issues
+- Delegates to Codex for thorough review (or heuristic mode with `--skip-codex`)
+- Verdicts: PASS (clean), WARN (advisory), BLOCK (with `--strict`)
+- Non-blocking by default
+
+### `/acis upgrade`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md`
+
+Check for and install missing components:
+- Compares plugin version with installed config version
+- Detects missing hooks (path validator, pre-commit)
+- Installs missing components with user confirmation
+- Updates config version marker
+
+### `/acis version`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/version.md`
+
+Display installed plugin version:
+- Shows version, author, license, repository
+- `--short` flag for version number only
+- `--json` flag for machine-readable output
 
 ## Flags
 

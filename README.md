@@ -4,6 +4,7 @@ A Claude Plugin for decision-oriented discovery, behavioral TDD remediation, and
 
 ## Features
 
+- **GENESIS Framework** (`/acis genesis`) - Transform vague ideas into structured system architectures
 - **Project Bootstrapping** (`/acis init`) - Interview-based or doc-extraction project setup
 - **Decision-Oriented Discovery** (`/acis discovery`) - Surface decisions before implementation
 - **Dual-CEO Validation** - AI-Native + Modern SWE perspectives on pending decisions
@@ -13,8 +14,10 @@ A Claude Plugin for decision-oriented discovery, behavioral TDD remediation, and
 - **Parallel Remediation** (`/acis remediate-parallel`) - Worktree-isolated parallel goal execution
 - **Trust but Re-verify** - Smart duplicate detection with TTL and change detection
 - **Quality Gate** - Codex code review before marking goals achieved
+- **Pre-Commit Review** (`/acis pre-commit-review`) - Quick design review of staged changes before commit
 - **ACIS Traces** - User-visible and structured observability for Process Auditor learning
 - **Process Auditor** (`/acis audit`) - Pattern analysis and dynamic skill generation
+- **Recommendation Routing** - Automatic classification and routing of process improvements to project or plugin scope
 - **Three-Loop Architecture** - Process → Discovery → Remediation loops
 
 ## Installation
@@ -127,6 +130,7 @@ Analyzes completed remediations, extracts patterns into skills, improves ACIS it
 
 | Command | Description |
 |---------|-------------|
+| `/acis genesis` | Transform an idea into structured architecture via 4-layer agent swarm |
 | `/acis init` | Bootstrap ACIS for a new project |
 | `/acis status` | Show progress on all goals |
 | `/acis discovery "<topic>"` | Proactive investigation |
@@ -135,7 +139,10 @@ Analyzes completed remediations, extracts patterns into skills, improves ACIS it
 | `/acis remediate <goal-file>` | Full TDD remediation pipeline |
 | `/acis remediate-parallel <goals>` | Parallel remediation with worktree isolation |
 | `/acis verify <goal-file>` | Run consensus verification only |
+| `/acis pre-commit-review` | Quick design review of staged changes |
 | `/acis audit` | Process Auditor (pattern analysis, skill generation) |
+| `/acis upgrade` | Check for and install missing ACIS components |
+| `/acis version` | Display installed plugin version |
 
 ## Three-Loop Architecture
 
@@ -214,23 +221,38 @@ acis/
 ├── .claude-plugin/
 │   ├── plugin.json               # Plugin manifest
 │   └── marketplace.json          # Marketplace definition (for distribution)
+├── .claude/
+│   └── hooks/
+│       ├── acis-path-validator.sh    # Path validation hook
+│       └── acis-pre-commit-hook.sh   # Pre-commit review reminder hook
 ├── commands/
 │   ├── acis.md                   # Main ACIS command reference
 │   ├── acis-init.md              # Project bootstrapping
 │   ├── acis-audit.md             # Process Auditor
+│   ├── genesis.md                # GENESIS vision-to-architecture orchestrator
 │   ├── help.md                   # Dynamic help system
 │   ├── status.md                 # Progress dashboard
 │   ├── extract.md                # PR goal extraction
 │   ├── discovery.md              # Multi-perspective investigation
 │   ├── resolve.md                # Decision resolution
 │   ├── remediate.md              # Full TDD pipeline
-│   └── verify.md                 # Consensus verification
+│   ├── pre-commit-review.md      # Quick design review before commit
+│   ├── upgrade.md                # Upgrade existing installations
+│   ├── verify.md                 # Consensus verification
+│   └── version.md                # Display plugin version
 ├── agents/                       # Specialized agents
+│   ├── genesis-*.md              # GENESIS framework agents (10 total)
+│   └── ...                       # Other agents
 ├── schemas/                      # JSON schemas
 ├── configs/                      # Perspectives, lenses
-├── templates/                    # Codex delegation templates
+├── templates/
+│   ├── genesis/                  # GENESIS output templates
+│   │   └── VISION_BOUNDED.md     # Vision bounding interview output
+│   └── ...                       # Other templates
 ├── prompts/                      # LLM prompt templates
-├── interview/                    # Interview system
+├── interview/
+│   ├── genesis-vision-interview.json  # GENESIS vision bounding questions
+│   └── ...                       # Other interview systems
 ├── audit/                        # Process Auditor system
 ├── skill-templates/              # Templates for generated skills
 ├── skills/                       # Dynamically generated skills
@@ -245,6 +267,72 @@ acis/
 - MCP server: `codex` (optional, for deep analysis)
 
 ## Version History
+
+### v2.8.0 (2026-02-05)
+- **Recommendation Routing**: Automatic classification and routing of Process Auditor recommendations
+  - Recommendations classified by scope: `project` vs `plugin`
+  - Plugin-scope recommendations auto-submitted as GitHub issues (primary)
+  - Fallback to `.acis/plugin-feedback/` files when GitHub unavailable
+  - New schema: `schemas/acis-recommendation.schema.json`
+- **Process Auditor Enhancements**:
+  - New Phase 3.5: CLASSIFY - Categorize recommendations by applicability
+  - New Phase 4.5: ROUTE - Submit plugin feedback to GitHub or fallback
+  - Structured recommendation storage in `audits/recommendations/`
+- New templates:
+  - `templates/plugin-feedback-issue.md` - GitHub issue format
+  - `templates/plugin-feedback-file.md` - Fallback file format
+- Classification criteria for project vs plugin scope documented
+- Dual-track improvement path: local skills + plugin-wide fixes
+
+### v2.7.0 (2026-02-01)
+- **Pre-Commit Code Review**: Quick design review of staged changes before committing
+  - New command: `/acis pre-commit-review` for design/architecture review
+  - Focuses on SOLID violations, layer breaches, coupling red flags
+  - Delegates to Codex for thorough review (or heuristic mode with `--skip-codex`)
+  - Verdicts: PASS (clean), WARN (advisory), BLOCK (with `--strict`)
+  - Non-blocking by default (WARN doesn't prevent commit)
+- **Pre-Commit Hook** (installed by default via `/acis init`)
+  - Reminds users to run `/acis pre-commit-review` before `git commit`
+  - Shows staged file count and line count
+  - Non-blocking: always allows commit to proceed
+  - Skip with: `git commit --no-verify` or `ACIS_SKIP_PRE_COMMIT=1`
+  - Opt out during install: `/acis init --skip-pre-commit-hook`
+- New template: `templates/codex-pre-commit-review.md`
+- New hook: `.claude/hooks/acis-pre-commit-hook.sh`
+- New command: `/acis version` to display installed plugin version
+- New command: `/acis upgrade` for upgrading existing installations
+  - Detects missing hooks and outdated config
+  - Auto-detect on first use of any ACIS command per session
+  - Shows non-intrusive one-liner when upgrade available
+- Updated: `scripts/install-hooks.sh` with pre-commit hook support
+
+### v2.6.0 (2026-01-30)
+- **GENESIS Framework**: Transform vague product ideas into structured system architectures
+  - Vision Bounding Interview (Gate 0) with red flag detection prevents "garbage-in"
+  - 4-Layer Agent Swarm Architecture:
+    - **Layer 1**: Parallel Analysis (Persona, Journey, Event Stormer, Similar Systems)
+    - **Layer 2**: Synthesis Agent with Elite Architect questions
+    - **Layer 3**: Challenge Reviewers (Security, Scalability, Accessibility, Cost)
+    - **Layer 4**: Arbitrator Agent with ADR generation
+  - 5 Strategic Human Gates for oversight without micro-management
+  - Dual-CEO model at Gate 3 (AI-Native vs Modern SWE perspectives)
+  - GTM positioning extraction from Similar Systems analysis
+- New command: `/acis genesis` to start vision-to-architecture transformation
+- New interview: `interview/genesis-vision-interview.json` (18 questions across 4 phases)
+- New template: `templates/genesis/VISION_BOUNDED.md`
+- New agents (10 total):
+  - `genesis-persona-analyst.md` - Extract personas and needs hierarchy
+  - `genesis-journey-mapper.md` - Map user flows with experience layers
+  - `genesis-event-stormer.md` - DDD event storming for domain events
+  - `genesis-similar-systems-analyst.md` - Competitive analysis with ADOPT/ADAPT/AVOID/INNOVATE
+  - `genesis-synthesis-agent.md` - Subsystem proposals with build vs buy
+  - `genesis-security-reviewer.md` - STRIDE analysis and compliance gaps
+  - `genesis-scalability-reviewer.md` - Bottleneck and SPOF analysis
+  - `genesis-accessibility-reviewer.md` - WCAG alignment for target users
+  - `genesis-cost-reviewer.md` - Budget mapping and cost projection
+  - `genesis-arbitrator-agent.md` - Conflict resolution and ADR generation
+- Output: `docs/genesis/` directory ready for `/acis init --from-genesis`
+- Pattern: ALIGNED decisions get rubber-stamp, CONFLICTED decisions require human choice
 
 ### v2.5.0 (2026-01-30)
 - **Swarm Orchestration**: Multi-agent coordination using Claude Code's TeammateTool

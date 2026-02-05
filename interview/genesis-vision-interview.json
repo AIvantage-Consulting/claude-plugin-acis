@@ -1,0 +1,712 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "purpose": "Vision bounding interview for GENESIS framework - transforms vague ideas into bounded system specifications",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Problem Space",
+      "description": "Understanding the problem being solved - must have clear answers to proceed",
+      "targetDuration": "3-5 minutes",
+      "questions": [
+        {
+          "id": "G1",
+          "question": "What specific problem are you solving?",
+          "header": "Problem",
+          "type": "open",
+          "required": true,
+          "topics": ["problem"],
+          "redFlags": {
+            "patterns": ["everything", "lots of things", "many problems"],
+            "action": "stop",
+            "message": "Too vague - need a specific, concrete problem statement"
+          },
+          "followUps": [
+            "Can you give me a concrete example of someone experiencing this problem?",
+            "What's the worst case scenario when this problem isn't solved?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Communication gap",
+              "description": "People struggle to connect or communicate effectively"
+            },
+            {
+              "label": "Information access",
+              "description": "Critical information is hard to find or use"
+            },
+            {
+              "label": "Process friction",
+              "description": "A workflow has too many steps or is error-prone"
+            },
+            {
+              "label": "Underserved population",
+              "description": "A specific group is poorly served by existing solutions"
+            }
+          ]
+        },
+        {
+          "id": "G2",
+          "question": "Who experiences this problem most acutely?",
+          "header": "Who",
+          "type": "open",
+          "required": true,
+          "topics": ["target-user"],
+          "redFlags": {
+            "patterns": ["everyone", "anybody", "all people", "the general public"],
+            "action": "stop",
+            "message": "\"Everyone\" is not a target user - need specific characteristics"
+          },
+          "followUps": [
+            "Describe a typical day in their life",
+            "What's their relationship with technology?",
+            "What constraints do they operate under?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Specific demographic",
+              "description": "Age group, profession, life situation"
+            },
+            {
+              "label": "Specific context",
+              "description": "People in a particular situation or environment"
+            },
+            {
+              "label": "Specific need",
+              "description": "People with a particular capability or limitation"
+            }
+          ]
+        },
+        {
+          "id": "G3",
+          "question": "How do they solve this problem today?",
+          "header": "Status quo",
+          "type": "open",
+          "required": true,
+          "topics": ["current-solution", "competition"],
+          "redFlags": {
+            "patterns": ["they don't", "there's nothing", "no solution exists"],
+            "action": "probe",
+            "message": "If truly no solution exists, probe deeper - how do they cope?"
+          },
+          "followUps": [
+            "What workarounds have they developed?",
+            "What existing products come closest?",
+            "Why haven't those solutions worked?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Manual workaround",
+              "description": "Spreadsheets, phone calls, pen and paper"
+            },
+            {
+              "label": "Competitor product",
+              "description": "Existing tool that partially addresses it"
+            },
+            {
+              "label": "Hired help",
+              "description": "Pay someone else to handle it"
+            },
+            {
+              "label": "Avoidance",
+              "description": "They just don't do it, accepting the cost"
+            }
+          ]
+        },
+        {
+          "id": "G4",
+          "question": "What's the cost of the current solution?",
+          "header": "Pain cost",
+          "type": "open",
+          "required": true,
+          "topics": ["pain-quantification"],
+          "redFlags": {
+            "patterns": ["no cost", "free", "doesn't matter"],
+            "action": "probe",
+            "message": "No cost suggests weak problem - probe for hidden costs"
+          },
+          "followUps": [
+            "Time cost - how much time do they spend?",
+            "Money cost - what do they pay?",
+            "Emotional cost - how does it make them feel?",
+            "Opportunity cost - what can't they do because of this?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Time burden",
+              "description": "Hours per week spent on workarounds"
+            },
+            {
+              "label": "Financial cost",
+              "description": "Money spent on current solutions"
+            },
+            {
+              "label": "Emotional toll",
+              "description": "Stress, frustration, anxiety"
+            },
+            {
+              "label": "Missed opportunities",
+              "description": "Things they can't do because of the problem"
+            }
+          ]
+        },
+        {
+          "id": "G5",
+          "question": "Why hasn't this been solved before? What's changed?",
+          "header": "Timing",
+          "type": "open",
+          "required": true,
+          "topics": ["timing", "insight"],
+          "redFlags": {
+            "patterns": ["I don't know", "not sure", "no reason"],
+            "action": "warn",
+            "message": "No clear timing insight is risky - competitors may have failed for good reasons"
+          },
+          "followUps": [
+            "What technology or capability is now available that wasn't before?",
+            "What market or behavioral shift has occurred?",
+            "What regulation or policy change enables this?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "New technology",
+              "description": "AI, mobile, cloud made it possible"
+            },
+            {
+              "label": "Market shift",
+              "description": "Demographics, behavior, or expectations changed"
+            },
+            {
+              "label": "Regulatory change",
+              "description": "New rules enable or require this"
+            },
+            {
+              "label": "Cost reduction",
+              "description": "What was expensive is now affordable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Solution Vision",
+      "description": "Understanding how the solution works - needs founder perspective",
+      "targetDuration": "3-5 minutes",
+      "questions": [
+        {
+          "id": "G6",
+          "question": "What's your unique insight? Why will YOUR solution work when others haven't?",
+          "header": "Insight",
+          "type": "open",
+          "required": true,
+          "topics": ["differentiation", "moat"],
+          "redFlags": {
+            "patterns": ["better UX", "easier to use", "cleaner design", "more features"],
+            "action": "warn",
+            "message": "\"Better UX\" is weak differentiation - need a structural advantage"
+          },
+          "followUps": [
+            "What do you know that competitors don't?",
+            "What can you do that they can't?",
+            "Why would users choose you over the incumbent?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Domain expertise",
+              "description": "Deep knowledge others lack"
+            },
+            {
+              "label": "Technical innovation",
+              "description": "New approach to the problem"
+            },
+            {
+              "label": "Business model",
+              "description": "Different way to capture value"
+            },
+            {
+              "label": "Access/distribution",
+              "description": "Unique channel to reach users"
+            }
+          ]
+        },
+        {
+          "id": "G7",
+          "question": "Why are YOU the right person/team to build this?",
+          "header": "Founder fit",
+          "type": "open",
+          "required": true,
+          "topics": ["founder-market-fit"],
+          "redFlags": {
+            "patterns": ["I just think", "seems like a good idea", "anyone could"],
+            "action": "probe",
+            "message": "No connection to the problem is risky - probe for personal stake"
+          },
+          "followUps": [
+            "Have you experienced this problem personally?",
+            "What relevant experience do you bring?",
+            "Who on your team has domain expertise?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Personal experience",
+              "description": "I've lived this problem myself"
+            },
+            {
+              "label": "Professional expertise",
+              "description": "I've worked in this domain for years"
+            },
+            {
+              "label": "Technical capability",
+              "description": "I've built similar systems before"
+            },
+            {
+              "label": "Network/access",
+              "description": "I have connections to target users"
+            }
+          ]
+        },
+        {
+          "id": "G8",
+          "question": "What does success look like in 1 year?",
+          "header": "1-year vision",
+          "type": "open",
+          "required": true,
+          "topics": ["scope", "success-metrics"],
+          "redFlags": {
+            "patterns": ["dominate the market", "millions of users", "IPO", "unicorn"],
+            "action": "warn",
+            "message": "Overly ambitious - need realistic, bounded 1-year goals"
+          },
+          "followUps": [
+            "How many users would indicate success?",
+            "What key behaviors would users exhibit?",
+            "What metrics would you track?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "User milestone",
+              "description": "Specific number of active users"
+            },
+            {
+              "label": "Behavior milestone",
+              "description": "Users doing X with frequency Y"
+            },
+            {
+              "label": "Business milestone",
+              "description": "Revenue, partnerships, or traction"
+            },
+            {
+              "label": "Product milestone",
+              "description": "Features shipped, quality achieved"
+            }
+          ]
+        },
+        {
+          "id": "G9",
+          "question": "What will you explicitly NOT do?",
+          "header": "Anti-scope",
+          "type": "open",
+          "required": true,
+          "topics": ["scope", "focus"],
+          "redFlags": {
+            "patterns": ["nothing", "we'll do everything", "whatever users want", "it depends"],
+            "action": "stop",
+            "message": "No anti-scope = unfocused. Must have clear exclusions."
+          },
+          "followUps": [
+            "What features are you intentionally deferring?",
+            "What user segments are you NOT serving?",
+            "What adjacent problems are you ignoring?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Platform exclusion",
+              "description": "Not building for X platform yet"
+            },
+            {
+              "label": "User exclusion",
+              "description": "Not serving X user type initially"
+            },
+            {
+              "label": "Feature exclusion",
+              "description": "Not building X capability in V1"
+            },
+            {
+              "label": "Market exclusion",
+              "description": "Not targeting X geography/industry"
+            }
+          ]
+        },
+        {
+          "id": "G10",
+          "question": "What's the ONE thing that MUST work for this to succeed?",
+          "header": "Core feature",
+          "type": "open",
+          "required": true,
+          "topics": ["core-value", "mvp"],
+          "redFlags": {
+            "patterns": ["multiple things", "several features", "a few things"],
+            "action": "stop",
+            "message": "Multiple core features = unfocused. Force prioritization."
+          },
+          "followUps": [
+            "If everything else fails but this works, would it still be valuable?",
+            "What's the simplest version of this that would be useful?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Core interaction",
+              "description": "The main thing users do"
+            },
+            {
+              "label": "Key value moment",
+              "description": "When users first realize value"
+            },
+            {
+              "label": "Critical capability",
+              "description": "The technical thing that enables everything"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Constraints",
+      "description": "Understanding boundaries and technical realities",
+      "targetDuration": "2-3 minutes",
+      "questions": [
+        {
+          "id": "G11",
+          "question": "What platforms must this work on?",
+          "header": "Platforms",
+          "type": "multi",
+          "required": true,
+          "topics": ["platform"],
+          "redFlags": {
+            "patterns": ["all platforms", "everywhere", "web and mobile and desktop and TV"],
+            "action": "warn",
+            "message": "All platforms is unrealistic for V1 - force prioritization"
+          },
+          "followUps": [
+            "What's the primary platform?",
+            "What percentage of users are on each?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Web only",
+              "description": "Browser-based, responsive"
+            },
+            {
+              "label": "Mobile-first",
+              "description": "iOS and/or Android native"
+            },
+            {
+              "label": "Offline-capable",
+              "description": "Must work without internet"
+            },
+            {
+              "label": "TV/embedded",
+              "description": "Smart TV, set-top box, IoT"
+            },
+            {
+              "label": "Desktop app",
+              "description": "Windows/Mac native application"
+            }
+          ]
+        },
+        {
+          "id": "G12",
+          "question": "Any regulatory or compliance requirements?",
+          "header": "Compliance",
+          "type": "multi",
+          "required": true,
+          "topics": ["compliance", "security"],
+          "redFlags": {
+            "patterns": ["healthcare without HIPAA", "payments without PCI", "EU users without GDPR"],
+            "action": "stop",
+            "message": "Compliance mismatch detected - this is a blocker"
+          },
+          "followUps": [
+            "Have you worked with these requirements before?",
+            "Do you have compliance expertise on the team?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "HIPAA",
+              "description": "US healthcare data protection"
+            },
+            {
+              "label": "GDPR",
+              "description": "EU data privacy regulation"
+            },
+            {
+              "label": "SOC2",
+              "description": "Service organization security controls"
+            },
+            {
+              "label": "PCI-DSS",
+              "description": "Payment card industry standards"
+            },
+            {
+              "label": "COPPA",
+              "description": "Children's online privacy (US)"
+            },
+            {
+              "label": "None identified",
+              "description": "No specific compliance requirements known"
+            }
+          ]
+        },
+        {
+          "id": "G13",
+          "question": "What's your budget constraint for V1?",
+          "header": "Budget",
+          "type": "open",
+          "required": true,
+          "topics": ["budget", "build-vs-buy"],
+          "redFlags": {
+            "patterns": ["unlimited", "doesn't matter", "whatever it takes"],
+            "action": "probe",
+            "message": "Unlimited budget is unrealistic - need real constraints"
+          },
+          "followUps": [
+            "Monthly infrastructure budget?",
+            "Development resources (team size, time)?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Bootstrapped",
+              "description": "Minimal spend, personal funds"
+            },
+            {
+              "label": "Seed-funded",
+              "description": "~$500K-2M to work with"
+            },
+            {
+              "label": "Series A+",
+              "description": "Significant resources available"
+            },
+            {
+              "label": "Enterprise project",
+              "description": "Part of larger org budget"
+            }
+          ]
+        },
+        {
+          "id": "G14",
+          "question": "What's your timeline to MVP?",
+          "header": "Timeline",
+          "type": "open",
+          "required": true,
+          "topics": ["timeline", "scope"],
+          "redFlags": {
+            "patterns": ["no deadline", "whenever it's ready", "take as long as needed"],
+            "action": "warn",
+            "message": "No deadline = scope creep risk. Need time constraint."
+          },
+          "followUps": [
+            "Is there a hard deadline (event, funding, competitor)?",
+            "What's driving this timeline?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Weeks",
+              "description": "1-4 weeks to something usable"
+            },
+            {
+              "label": "Months",
+              "description": "1-3 months to MVP"
+            },
+            {
+              "label": "Quarters",
+              "description": "3-6 months to launch"
+            },
+            {
+              "label": "External deadline",
+              "description": "Specific date driven by external factor"
+            }
+          ]
+        },
+        {
+          "id": "G15",
+          "question": "Any existing assets, code, or infrastructure to build on?",
+          "header": "Starting point",
+          "type": "open",
+          "required": false,
+          "topics": ["existing-assets", "integrations"],
+          "followUps": [
+            "What state is the existing code in?",
+            "Any technical debt to be aware of?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Greenfield",
+              "description": "Starting from scratch"
+            },
+            {
+              "label": "Existing prototype",
+              "description": "Have a working proof of concept"
+            },
+            {
+              "label": "Existing product",
+              "description": "Adding to or rebuilding existing system"
+            },
+            {
+              "label": "Existing infrastructure",
+              "description": "Have backend/cloud setup already"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Inspiration & Anti-Inspiration",
+      "description": "Understanding vision through examples and counter-examples",
+      "targetDuration": "2-3 minutes",
+      "questions": [
+        {
+          "id": "G16",
+          "question": "What products do you admire? What specifically about them?",
+          "header": "Inspiration",
+          "type": "open",
+          "required": true,
+          "topics": ["inspiration", "patterns"],
+          "redFlags": {
+            "patterns": ["nothing", "none", "I don't use any apps"],
+            "action": "warn",
+            "message": "No inspiration suggests unclear vision - probe deeper"
+          },
+          "followUps": [
+            "What would you steal from each?",
+            "How do they make users feel?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "UX inspiration",
+              "description": "Product with great user experience"
+            },
+            {
+              "label": "Business model inspiration",
+              "description": "Product with smart monetization"
+            },
+            {
+              "label": "Technical inspiration",
+              "description": "Product with impressive capabilities"
+            },
+            {
+              "label": "Brand inspiration",
+              "description": "Product with strong identity"
+            }
+          ]
+        },
+        {
+          "id": "G17",
+          "question": "What products do you hate? What specifically about them?",
+          "header": "Anti-inspiration",
+          "type": "open",
+          "required": true,
+          "topics": ["anti-patterns"],
+          "redFlags": {
+            "patterns": ["nothing", "none", "they're all fine"],
+            "action": "probe",
+            "message": "No anti-inspiration suggests unclear values - probe deeper"
+          },
+          "followUps": [
+            "What mistakes will you NOT make?",
+            "What dark patterns will you avoid?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "UX anti-pattern",
+              "description": "Product with frustrating experience"
+            },
+            {
+              "label": "Ethics anti-pattern",
+              "description": "Product with problematic practices"
+            },
+            {
+              "label": "Complexity anti-pattern",
+              "description": "Product that's overengineered"
+            },
+            {
+              "label": "Business anti-pattern",
+              "description": "Product with user-hostile monetization"
+            }
+          ]
+        },
+        {
+          "id": "G18",
+          "question": "Who would you consider direct and indirect competitors?",
+          "header": "Competitors",
+          "type": "open",
+          "required": true,
+          "topics": ["competition", "market"],
+          "redFlags": {
+            "patterns": ["no competitors", "nothing like this exists", "blue ocean"],
+            "action": "probe",
+            "message": "No competitors is either naive or a warning sign - probe for indirect competition"
+          },
+          "followUps": [
+            "Why haven't they solved this?",
+            "What's their weakness?",
+            "How would you position against them?"
+          ],
+          "exampleOptions": [
+            {
+              "label": "Direct competitor",
+              "description": "Same problem, similar solution"
+            },
+            {
+              "label": "Indirect competitor",
+              "description": "Same problem, different approach"
+            },
+            {
+              "label": "Substitute",
+              "description": "Different solution users might choose instead"
+            },
+            {
+              "label": "Incumbent",
+              "description": "Status quo that users stick with"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "readinessAssessment": {
+    "criteria": {
+      "problem_clarity": {
+        "high": "Specific problem with quantified pain and clear target user",
+        "medium": "Problem identified but pain or target user needs refinement",
+        "low": "Vague problem or \"everyone\" as target"
+      },
+      "solution_clarity": {
+        "high": "Clear unique insight, focused scope, defined anti-scope",
+        "medium": "Good direction but some scope ambiguity",
+        "low": "No clear differentiation or unfocused scope"
+      },
+      "constraint_clarity": {
+        "high": "Clear platform, compliance, budget, timeline",
+        "medium": "Some constraints defined, others unclear",
+        "low": "Unrealistic constraints or none defined"
+      }
+    },
+    "verdicts": {
+      "READY": "All three criteria at High or Medium - proceed to Layer 1 analysis",
+      "NEEDS_CLARIFICATION": "One or more criteria at Low - return specific questions",
+      "NOT_READY": "Multiple Low ratings or critical red flags triggered - cannot proceed"
+    }
+  },
+  "topicKeywords": {
+    "compliance.hipaa": ["health", "medical", "patient", "PHI", "healthcare", "hospital", "clinic"],
+    "compliance.gdpr": ["EU", "Europe", "European", "privacy", "consent", "data rights"],
+    "compliance.pci": ["payment", "credit card", "transaction", "checkout", "billing"],
+    "platform.offline": ["offline", "no internet", "disconnected", "sync", "rural"],
+    "platform.mobile": ["mobile", "iOS", "Android", "phone", "app store"],
+    "platform.tv": ["TV", "television", "set-top", "smart TV", "ambient"],
+    "target.elderly": ["elderly", "senior", "aging", "older", "grandparent"],
+    "target.healthcare": ["patient", "caregiver", "doctor", "nurse", "medical"]
+  }
+}

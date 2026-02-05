@@ -1,7 +1,7 @@
 {
   "name": "acis",
-  "version": "2.5.0",
-  "description": "Automated Code Improvement System - Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
+  "version": "2.8.0",
+  "description": "Automated Code Improvement System - GENESIS vision-to-architecture framework, Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Pre-Commit Review, Recommendation Routing, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
   "author": {
     "name": "AIvantage Consulting Inc",
     "url": "https://aivantage-consulting.com"
@@ -11,6 +11,7 @@
   "license": "MIT",
   "keywords": [
     "code-review",
+    "pre-commit",
     "tdd",
     "remediation",
     "pr-review",
@@ -19,6 +20,13 @@
     "multi-agent",
     "consensus-verification",
     "swarm-orchestration",
-    "teammatetool"
+    "teammatetool",
+    "genesis",
+    "system-design",
+    "architecture",
+    "vision-bounding",
+    "adr",
+    "recommendation-routing",
+    "process-improvement"
   ]
 }

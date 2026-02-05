@@ -230,20 +230,58 @@ Read ${CLAUDE_PLUGIN_ROOT}/prompts/extract-goals-from-review.prompt.md
 
 For each comment, determine if it represents a quantifiable issue:
 
-**Include**:
+**Include** (ALL severities - critical, high, medium, low):
 - Specific code patterns (Math.random, console.log, any type)
 - Code smells (empty catch, magic numbers)
 - Security concerns (hardcoded secrets, injection)
 - Performance issues (N+1, memory leaks)
 - Accessibility gaps (missing alt, no keyboard nav)
+- Recommendations with actionable patterns
+- Notes identifying specific code issues
+- Items marked "Risk: Low/Medium" with clear detection criteria
 
-**Skip**:
+**Skip** (NOT extractable):
 - Subjective opinions without patterns
 - Questions or clarifications
 - Praise or acknowledgments
 - Already resolved in PR
+- Comments without quantifiable detection criteria
+
+**CRITICAL: Severity Does NOT Affect Extraction Eligibility**
+
+| Old Behavior (WRONG) | New Behavior (CORRECT) |
+|---------------------|------------------------|
+| Extract only `critical` and `high` | Extract ALL severities |
+| Skip `medium` and `low` | Include `medium` and `low` |
+| Severity filters inclusion | Severity affects ORDER only |
+
+Extraction should maximize **recall** (catch everything quantifiable).
+Remediation considers **precision** (prioritize high-impact first).
+
+**Framing Language Patterns** (extract these too):
+- "Recommendation:" → extract as quantifiable if pattern exists
+- "Note:" → extract if identifies specific code issue
+- "Risk: Low/Medium" → extract with corresponding severity
+- "⚠️" emoji → extract as medium severity minimum
+- "Potential Bug" section → extract all quantifiable items
+- "Performance Review" section → extract all quantifiable items
+- "Code Quality" section → extract all quantifiable items
+
+**Section-Agnostic Extraction**: Treat ALL sections equally. Whether an issue appears in "Issues", "Performance Review", "Code Quality", or "Specific Issues" section - if it's quantifiable, extract it. Section only affects the `lens` categorization in the goal file.
 
 ### Step 5: Generate Goal Files
+
+**Extract ALL quantifiable issues, then sort by severity for prioritization order**:
+
+```
+Severity Order (for remediation prioritization):
+1. critical  - Address immediately
+2. high      - Address in current PR/sprint
+3. medium    - Address soon
+4. low       - Address when convenient
+
+Note: ALL are extracted. Severity affects ORDER, not INCLUSION.
+```
 
 For each quantifiable issue, create a goal file:
 
@@ -374,10 +412,13 @@ Output summary:
 ║  ┌────────────────────────────┬──────────┬──────────┬─────────┬──────────┐  ║
 ║  │ Goal ID                    │ Lens     │ Severity │Baseline │ Target   │  ║
 ║  ├────────────────────────────┼──────────┼──────────┼─────────┼──────────┤  ║
-║  │ PR55-G1-math-random        │ security │ high     │ 47      │ 0        │  ║
-║  │ PR55-G2-uninit-session     │ security │ critical │ 12      │ 0        │  ║
-║  │ PR55-G3-console-log        │ maintain │ low      │ 89      │ 0        │  ║
+║  │ PR55-G1-uninit-session     │ security │ critical │ 12      │ 0        │  ║
+║  │ PR55-G2-math-random        │ security │ high     │ 47      │ 0        │  ║
+║  │ PR55-G3-race-condition     │ perform  │ medium   │ 3       │ 0        │  ║
+║  │ PR55-G4-console-log        │ maintain │ low      │ 89      │ 0        │  ║
 ║  └────────────────────────────┴──────────┴──────────┴─────────┴──────────┘  ║
+║                                                                              ║
+║  (Sorted by severity: critical → high → medium → low)                        ║
 ║                                                                              ║
 ║  🔄 RE-CHECKED (file changes detected): {count}                              ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
@@ -441,7 +482,7 @@ Output summary:
 |------|-------------|
 | `--dry-run` | Analyze and show what would be extracted, don't create files |
 | `--lens <lens>` | Filter to specific assessment lens |
-| `--severity <level>` | Filter by minimum severity (critical, high, medium, low) |
+| `--severity <level>` | **OPTIONAL FILTER**: Only extract goals >= this severity. Default: extract ALL severities |
 | `--reviewer <name>` | Filter by reviewer name |
 | `--output-dir <path>` | Override goals output directory |
 | `--skip-baseline` | Skip baseline measurement (faster, fill in later) |
@@ -454,6 +495,34 @@ Output summary:
 | `--ttl-override N` | Override TTL days for all confidence levels |
 | `--update-registry` | Prompt to add new items to known-resolutions.json |
 | `--recheck-blocked` | Include previously blocked goals for re-attempt |
+
+### Default Behavior (No Flags)
+
+```
+/acis extract 55
+```
+
+Extracts ALL quantifiable issues regardless of severity:
+- ✅ critical issues
+- ✅ high issues
+- ✅ medium issues
+- ✅ low issues
+
+Goals are sorted by severity for remediation prioritization, but ALL are extracted.
+
+### Filtered Behavior (With --severity)
+
+```
+/acis extract 55 --severity high
+```
+
+Only extracts issues with severity >= high:
+- ✅ critical issues
+- ✅ high issues
+- ❌ medium issues (filtered out)
+- ❌ low issues (filtered out)
+
+Use this only when you intentionally want to defer low-priority items.
 
 ## Quality Criteria
 

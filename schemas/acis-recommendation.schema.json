@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "acis-recommendation.schema.json",
+  "title": "ACIS Recommendation Schema",
+  "description": "Structured recommendations from Process Auditor with applicability classification for routing to project or plugin scope",
+  "type": "object",
+  "required": ["recommendation_id", "timestamp", "type", "applicability", "title", "status"],
+  "properties": {
+    "recommendation_id": {
+      "type": "string",
+      "pattern": "^REC-[A-Z0-9]+-[0-9]{4}$",
+      "description": "Unique recommendation identifier (e.g., REC-PR60-0001)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "audit_id": {
+      "type": "string",
+      "description": "Parent audit report ID"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project name where recommendation originated"
+    },
+    "goal_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Goals that triggered this recommendation"
+    },
+
+    "type": {
+      "type": "string",
+      "enum": ["reinforcement", "correction", "skill_candidate", "deprecation"],
+      "description": "Recommendation type: reinforcement (keep doing), correction (need to change), skill_candidate (new skill), deprecation (stop doing)"
+    },
+
+    "applicability": {
+      "type": "object",
+      "required": ["scope"],
+      "description": "Where this recommendation applies",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["project", "plugin"],
+          "description": "project = applies to this project only; plugin = applies to ACIS plugin itself"
+        },
+        "scope_rationale": {
+          "type": "string",
+          "description": "Why this scope was determined"
+        },
+        "generalizability": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "How generalizable is this across projects"
+        },
+        "affected_components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Which ACIS components are affected (for plugin scope)"
+        },
+        "requires_code_change": {
+          "type": "boolean",
+          "description": "Does this require changing ACIS plugin code?"
+        }
+      }
+    },
+
+    "title": {
+      "type": "string",
+      "description": "Short title for the recommendation"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the recommendation"
+    },
+
+    "evidence": {
+      "type": "object",
+      "description": "Evidence supporting this recommendation",
+      "properties": {
+        "problem_statement": {
+          "type": "string",
+          "description": "What problem was observed"
+        },
+        "occurrences": {
+          "type": "integer",
+          "description": "How many times this pattern was observed"
+        },
+        "impact": {
+          "type": "string",
+          "description": "What impact the problem had"
+        },
+        "root_cause": {
+          "type": "string",
+          "description": "Root cause analysis (WHY-5)"
+        },
+        "five_whys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "integer" },
+              "why": { "type": "string" },
+              "answer": { "type": "string" }
+            }
+          }
+        },
+        "supporting_data": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional supporting evidence"
+        }
+      }
+    },
+
+    "proposed_fix": {
+      "type": "object",
+      "description": "How to address this recommendation",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Brief summary of the fix"
+        },
+        "detailed_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step-by-step fix instructions"
+        },
+        "code_snippet": {
+          "type": "string",
+          "description": "Code change if applicable"
+        },
+        "files_to_modify": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files that need modification"
+        },
+        "estimated_effort": {
+          "type": "string",
+          "enum": ["trivial", "small", "medium", "large"],
+          "description": "Effort estimate (NOT time-based)"
+        },
+        "breaking_change": {
+          "type": "boolean",
+          "description": "Would this be a breaking change?"
+        }
+      }
+    },
+
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected", "applied", "deferred"],
+      "description": "Current status of this recommendation"
+    },
+
+    "routing": {
+      "type": "object",
+      "description": "How this recommendation was/will be routed",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["github_issue", "feedback_file", "skill_file", "config_update", "manual"],
+          "description": "Primary routing method"
+        },
+        "github_issue": {
+          "type": "object",
+          "properties": {
+            "repo": { "type": "string" },
+            "issue_number": { "type": "integer" },
+            "issue_url": { "type": "string" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        },
+        "feedback_file": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        },
+        "skill_file": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string" },
+            "skill_id": { "type": "string" }
+          }
+        },
+        "fallback_reason": {
+          "type": "string",
+          "description": "Why fallback routing was used (if applicable)"
+        }
+      }
+    },
+
+    "priority": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Priority for addressing this recommendation"
+    },
+
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for categorization (e.g., 'extraction', 'deferral', 'parallel')"
+    },
+
+    "related_recommendations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs of related recommendations"
+    },
+
+    "resolution": {
+      "type": "object",
+      "description": "How this recommendation was resolved (if applied/rejected)",
+      "properties": {
+        "resolved_at": { "type": "string", "format": "date-time" },
+        "resolved_by": { "type": "string" },
+        "resolution_notes": { "type": "string" },
+        "verification": {
+          "type": "string",
+          "description": "How the fix was verified"
+        }
+      }
+    }
+  }
+}

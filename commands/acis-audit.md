@@ -35,12 +35,51 @@ The Process Auditor is the **outermost loop** (Loop 1) in ACIS's three-loop arch
     ┌───────────────────────────────────────────────────────────┘
     │
     ▼
-┌───────┐                    ┌──────────┐
-│ APPLY │───────────────────►│ DOCUMENT │───────────────► Resume work
-└───────┘                    └──────────┘
-  Update prompts               Write audit log
-  Adjust lens weights          Generate report
-  GENERATE SKILLS              Archive patterns
+┌──────────┐                 ┌───────┐                    ┌───────┐
+│ CLASSIFY │────────────────►│ APPLY │───────────────────►│ ROUTE │
+└──────────┘                 └───────┘                    └───┬───┘
+  Categorize by scope          Update prompts                 │
+  project vs plugin            GENERATE SKILLS                │
+                                                              │
+    ┌─────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌──────────┐
+│ DOCUMENT │───────────────► Resume work
+└──────────┘
+  Write audit log
+  GitHub issues (plugin)
+  Feedback files (fallback)
+  Generate report
+```
+
+### Recommendation Flow by Scope
+
+```
+LEARN Phase Output
+         │
+         ▼
+┌─────────────────────────┐
+│    CLASSIFY Phase       │
+│    (scope assignment)   │
+└─────────────────────────┘
+         │
+    ┌────┴────┐
+    │         │
+PROJECT     PLUGIN
+    │         │
+    ▼         ▼
+┌─────────┐ ┌─────────────────┐
+│ APPLY   │ │ APPLY + ROUTE   │
+│ Phase   │ │ Phases          │
+└─────────┘ └─────────────────┘
+    │              │
+    ▼              ▼
+┌─────────────┐ ┌─────────────────┐
+│ Project     │ │ GitHub Issue    │
+│ skills/     │ │ OR              │
+│ config      │ │ Feedback File   │
+└─────────────┘ └─────────────────┘
 ```
 
 ## Phase Details
@@ -124,6 +163,58 @@ The Process Auditor is the **outermost loop** (Loop 1) in ACIS's three-loop arch
 
 **Output**: Reinforcements, corrections, skill candidates, knowledge gap report
 
+### Phase 3.5: CLASSIFY (Recommendation Routing)
+
+**Purpose**: Classify each recommendation by applicability scope to determine routing.
+
+**Actions**:
+
+1. **For each recommendation** (reinforcement, correction, skill candidate):
+
+   a. **Evaluate Scope Criteria**:
+
+   | Criterion | → Project | → Plugin |
+   |-----------|-----------|----------|
+   | Affects `.acis-config.json` only | ✓ | |
+   | Affects project-specific patterns | ✓ | |
+   | Affects ACIS command behavior | | ✓ |
+   | Affects extraction/deferral logic | | ✓ |
+   | Generalizable across all projects | | ✓ |
+   | Requires ACIS plugin code change | | ✓ |
+   | Contains project-specific paths/names | ✓ | |
+   | References generic ACIS components | | ✓ |
+
+   b. **Assign Scope**:
+   ```javascript
+   if (requiresPluginCodeChange || affectsACISCommands || generalizable) {
+     recommendation.applicability.scope = "plugin";
+     recommendation.applicability.affected_components = identifyComponents(recommendation);
+   } else {
+     recommendation.applicability.scope = "project";
+   }
+   ```
+
+   c. **Assess Generalizability** (for plugin-scope):
+   - `high`: Would benefit all ACIS users
+   - `medium`: Would benefit most projects with similar patterns
+   - `low`: Edge case, but still plugin-level
+
+2. **Create Structured Recommendations** using schema from `schemas/acis-recommendation.schema.json`
+
+3. **Generate recommendation IDs**: `REC-{AUDIT_ID}-{SEQUENCE}`
+
+**Classification Examples**:
+
+| Recommendation | Scope | Rationale |
+|----------------|-------|-----------|
+| "Deferral heuristic needs parallelizability" | **plugin** | Affects `commands/extract.md`, generalizable |
+| "Remove severity threshold from extraction" | **plugin** | Affects extraction logic, all users impacted |
+| "Add framing language patterns" | **plugin** | Affects extraction patterns, generalizable |
+| "Use lightweight parallel for crypto.randomUUID" | **project** | Project-specific pattern |
+| "Early CI verification before push" | **project** | Project workflow preference |
+
+**Output**: Classified recommendations with `applicability.scope` assigned
+
 ### Phase 4: APPLY
 
 **Purpose**: Implement process improvements and generate skills.
@@ -150,6 +241,126 @@ The Process Auditor is the **outermost loop** (Loop 1) in ACIS's three-loop arch
    - Optionally archive to `skills/.archive/`
 
 **Output**: Applied changes, generated skills
+
+### Phase 4.5: ROUTE (Plugin Feedback Submission)
+
+**Purpose**: Submit plugin-scope recommendations to ACIS repository for plugin-wide improvement.
+
+**Routing Decision Tree**:
+
+```
+For each recommendation with applicability.scope === "plugin":
+         │
+         ▼
+    ┌────────────────────────────┐
+    │ Check GitHub CLI available │
+    │ command -v gh              │
+    └────────────────────────────┘
+         │
+    ┌────┴────┐
+    │         │
+  Found     Not Found
+    │         │
+    ▼         │
+┌──────────────────────┐        │
+│ Check GitHub auth    │        │
+│ gh auth status       │        │
+└──────────────────────┘        │
+    │                           │
+┌───┴───┐                       │
+│       │                       │
+OK    Failed                    │
+│       │                       │
+▼       └───────────────────────┤
+┌──────────────────────┐        │
+│ Check repo write     │        │
+│ access               │        │
+└──────────────────────┘        │
+    │                           │
+┌───┴───┐                       │
+│       │                       │
+OK    Failed                    │
+│       │                       │
+▼       └───────────────────────┤
+                                │
+CREATE GITHUB ISSUE ◄───────────┤
+         │                      │
+         │                      └───► CREATE FEEDBACK FILE
+         │                                    │
+         ▼                                    ▼
+Update recommendation.routing    Update recommendation.routing
+  .method = "github_issue"         .method = "feedback_file"
+  .github_issue.issue_number       .feedback_file.path
+  .github_issue.issue_url          .fallback_reason
+```
+
+**Primary: GitHub Issue Creation**:
+
+```bash
+# Load issue template
+template="${CLAUDE_PLUGIN_ROOT}/templates/plugin-feedback-issue.md"
+
+# Fill template variables
+issue_body=$(fill_template "$template" "$recommendation")
+
+# Create issue
+gh issue create \
+  --repo "aivantage-consulting/claude-plugin-acis" \
+  --title "[Process Auditor] ${recommendation.type}: ${recommendation.title}" \
+  --body "$issue_body" \
+  --label "process-auditor,${recommendation.type},${recommendation.priority}"
+```
+
+**Fallback: Local Feedback File**:
+
+If GitHub is unavailable, create local feedback file:
+
+```bash
+# Create feedback directory
+mkdir -p .acis/plugin-feedback
+
+# Generate feedback file
+feedback_file=".acis/plugin-feedback/FEEDBACK-$(date +%Y%m%d)-${AUDIT_ID}.md"
+
+# Load template and fill
+template="${CLAUDE_PLUGIN_ROOT}/templates/plugin-feedback-file.md"
+fill_template "$template" "$recommendations" > "$feedback_file"
+```
+
+**Update Recommendation Routing**:
+
+After routing, update each recommendation's `routing` field:
+
+```json
+{
+  "routing": {
+    "method": "github_issue",
+    "github_issue": {
+      "repo": "aivantage-consulting/claude-plugin-acis",
+      "issue_number": 42,
+      "issue_url": "https://github.com/aivantage-consulting/claude-plugin-acis/issues/42",
+      "created_at": "2026-02-05T23:45:00Z"
+    }
+  }
+}
+```
+
+Or for fallback:
+
+```json
+{
+  "routing": {
+    "method": "feedback_file",
+    "feedback_file": {
+      "path": ".acis/plugin-feedback/FEEDBACK-20260205-PR60.md",
+      "created_at": "2026-02-05T23:45:00Z"
+    },
+    "fallback_reason": "GitHub CLI not authenticated"
+  }
+}
+```
+
+**Output**: Routed recommendations (GitHub issues or feedback files)
 
 ### Phase 5: DOCUMENT
 
@@ -238,12 +449,29 @@ jq 'select(.blocker.blocker_type and .blocker.resolved == false)' \
 
 ## Output Locations
 
-| Artifact | Location |
-|----------|----------|
-| Audit reports | `${config.paths.audits}/AUDIT-{timestamp}.md` |
-| Generated skills | `${config.paths.skills}/{skill-name}/SKILL.md` |
-| Archived skills | `${config.paths.skills}/.archive/` |
-| State updates | `${config.paths.state}/audit-state.json` |
+| Artifact | Location | Scope |
+|----------|----------|-------|
+| Audit reports | `${config.paths.audits}/AUDIT-{timestamp}.md` | Both |
+| Generated skills | `${config.paths.skills}/{skill-name}/SKILL.md` | Project |
+| Archived skills | `${config.paths.skills}/.archive/` | Project |
+| State updates | `${config.paths.state}/audit-state.json` | Project |
+| Recommendations | `${config.paths.audits}/recommendations/{audit-id}.json` | Both |
+| GitHub issues | `aivantage-consulting/claude-plugin-acis/issues` | Plugin |
+| Feedback files | `.acis/plugin-feedback/FEEDBACK-{date}-{audit-id}.md` | Plugin (fallback) |
+
+### Recommendation Artifacts
+
+Each recommendation is stored as structured JSON:
+
+```
+${config.paths.audits}/
+├── AUDIT-20260205-PR60.md           # Human-readable report
+├── recommendations/
+│   ├── AUDIT-20260205-PR60.json     # All recommendations (JSON)
+│   └── REC-PR60-0001.json           # Individual recommendation
+```
+
+The JSON follows `schemas/acis-recommendation.schema.json`.
 
 ## Integration with Other Commands
 
@@ -267,9 +495,20 @@ Process Auditor Complete!
 
 Scope: {N} goals analyzed (since {last_audit_date})
 
-Reinforcements: {M} patterns identified
-Corrections: {K} issues flagged
-Skills Generated: {J} new skills
+╔═══════════════════════════════════════════════════════════════╗
+║  Recommendations by Scope                                      ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                                ║
+║  PROJECT-SCOPE ({P} total):                                   ║
+║    Reinforcements: {M} patterns identified                     ║
+║    Corrections: {K} issues flagged                             ║
+║    Skills Generated: {J} new skills                            ║
+║                                                                ║
+║  PLUGIN-SCOPE ({Q} total):                                    ║
+║    GitHub Issues Created: {G}                                  ║
+║    Feedback Files (fallback): {F}                              ║
+║                                                                ║
+╚═══════════════════════════════════════════════════════════════╝
 
 Report: docs/audits/AUDIT-{timestamp}.md
 
@@ -277,5 +516,46 @@ New skills available:
   - {skill-name-1}
   - {skill-name-2}
 
+Plugin feedback submitted:
+  - #{issue-1}: {title-1}
+  - #{issue-2}: {title-2}
+  (or: See .acis/plugin-feedback/ for pending submissions)
+
 Next audit after: {auditThreshold} more goal completions
+```
+
+### GitHub Issue Summary (if created)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Plugin Feedback Submitted                                     ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                                ║
+║  Created {G} issues on aivantage-consulting/claude-plugin-acis ║
+║                                                                ║
+║  #42: Remove severity threshold from extraction                ║
+║       https://github.com/aivantage-consulting/.../issues/42    ║
+║                                                                ║
+║  #43: Add framing language patterns to extraction              ║
+║       https://github.com/aivantage-consulting/.../issues/43    ║
+║                                                                ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### Fallback Summary (if GitHub unavailable)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Plugin Feedback Saved Locally                                 ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                                ║
+║  {Q} plugin-scope recommendations saved to:                    ║
+║    .acis/plugin-feedback/FEEDBACK-20260205-PR60.md            ║
+║                                                                ║
+║  Reason: {fallback_reason}                                     ║
+║                                                                ║
+║  To submit later:                                              ║
+║    /acis submit-feedback                                       ║
+║                                                                ║
+╚═══════════════════════════════════════════════════════════════╝
 ```

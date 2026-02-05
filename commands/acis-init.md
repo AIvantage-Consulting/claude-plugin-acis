@@ -9,6 +9,7 @@ User invokes `/acis init` command with optional flags:
 - `--interactive`: Force interactive interview mode
 - `--output <path>`: Custom output path (default: `.acis-config.json`)
 - `--skip-plugins`: Skip plugin dependency check
+- `--skip-pre-commit-hook`: Don't install the pre-commit review reminder hook
 
 ## Workflow
 
@@ -68,10 +69,11 @@ User invokes `/acis init` command with optional flags:
                               │
                               ▼
     ┌─────────────────────────────────────────────────┐
-    │  STEP 7: Install Path Validation Hooks           │
-    │  - Copy acis-path-validator.sh to project        │
-    │  - Configure PreToolUse hook in settings.json    │
-    │  - BLOCKS nested paths, absolute paths, etc.     │
+    │  STEP 7: Install ACIS Hooks                       │
+    │  - Path validator (blocks bad paths)              │
+    │  - Pre-commit review reminder (default ON)        │
+    │  - Configure PreToolUse hooks in settings.json    │
+    │  - Use --skip-pre-commit-hook to opt out          │
     └─────────────────────────────────────────────────┘
 ```
 
@@ -456,9 +458,9 @@ No plugins installed:
 "pluginDefaults": { "skipCodex": true, "skipRalphLoop": true, "useInternalAgentsOnly": true }
 ```
 
-## Step 7: Install Path Validation Hooks
+## Step 7: Install ACIS Hooks
 
-**CRITICAL**: Install runtime hooks that ENFORCE path validation rules.
+**CRITICAL**: Install runtime hooks that ENFORCE path validation and provide pre-commit review reminders.
 
 This step is NOT optional. Without hooks, path validation rules are just documentation.
 
@@ -467,17 +469,22 @@ This step is NOT optional. Without hooks, path validation rules are just documen
 Execute the hook installation script:
 
 ```bash
+# Default: install both path validator AND pre-commit review hooks
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-hooks.sh" "${PROJECT_ROOT}"
+
+# If --skip-pre-commit-hook flag was passed:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-hooks.sh" "${PROJECT_ROOT}" --skip-pre-commit-hook
 ```
 
 This will:
 1. Create `${PROJECT_ROOT}/.claude/hooks/` directory
 2. Copy `acis-path-validator.sh` to project
-3. Create/update `${PROJECT_ROOT}/.claude/settings.json` with hook configuration
+3. Copy `acis-pre-commit-hook.sh` to project (unless --skip-pre-commit-hook)
+4. Create/update `${PROJECT_ROOT}/.claude/settings.json` with hook configuration
 
-### 7.2 Hook Behavior
+### 7.2 Hook Behaviors
 
-The installed hook intercepts Edit/Write operations BEFORE they execute:
+**Path Validator** (intercepts Edit/Write operations):
 
 | Detection | Action | Exit Code |
 |-----------|--------|-----------|
@@ -486,27 +493,46 @@ The installed hook intercepts Edit/Write operations BEFORE they execute:
 | Path traversal (`..`) in config | **BLOCK** | 2 |
 | ACIS artifact in non-standard location | **WARN** (allow) | 0 |
 
+**Pre-Commit Review** (intercepts git commit via Bash):
+
+| Condition | Action |
+|-----------|--------|
+| `git commit` with staged changes | Show reminder to run `/acis pre-commit-review` |
+| `git commit --no-verify` | Skip reminder |
+| `ACIS_SKIP_PRE_COMMIT=1` | Skip reminder |
+
+The pre-commit hook is **non-blocking** - it shows a reminder but always allows the commit to proceed.
+
 ### 7.3 Show Installation Summary
 
 ```
 ╔══════════════════════════════════════════════════════════════════╗
-║  Path Validation Hooks Installed                                  ║
+║  ACIS Hooks Installed                                             ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                   ║
 ║  Installed files:                                                 ║
 ║    • .claude/hooks/acis-path-validator.sh                        ║
+║    • .claude/hooks/acis-pre-commit-hook.sh                       ║
 ║    • .claude/settings.json (updated)                             ║
 ║                                                                   ║
-║  The hook will now:                                               ║
+║  Path Validator will:                                             ║
 ║    ✗ BLOCK nested paths (docs/acis/goals/docs/acis/goals)        ║
 ║    ✗ BLOCK absolute paths in .acis-config.json                   ║
 ║    ✗ BLOCK path traversal (..) in config                         ║
 ║    ⚠ WARN about artifacts in non-standard locations              ║
 ║                                                                   ║
+║  Pre-Commit Review will:                                          ║
+║    • Remind you to run /acis pre-commit-review before commit     ║
+║    • Non-blocking (you can proceed with commit)                  ║
+║                                                                   ║
+║  To skip pre-commit reminder:                                     ║
+║    git commit --no-verify                                         ║
+║    ACIS_SKIP_PRE_COMMIT=1 git commit                              ║
+║                                                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
-### 7.4 Hook Already Exists
+### 7.4 Hooks Already Exist
 
 If hooks are already installed, the script detects this and skips:
 
@@ -528,14 +554,20 @@ ACIS initialized successfully!
 Configuration: .acis-config.json
 Goals directory: docs/reviews/goals/
 Skills directory: skills/ (populated by Process Auditor)
-Path hooks: .claude/hooks/acis-path-validator.sh (ACTIVE)
+Hooks installed:
+  - Path validator: .claude/hooks/acis-path-validator.sh (ACTIVE)
+  - Pre-commit review: .claude/hooks/acis-pre-commit-hook.sh (ACTIVE)
 
 Next steps:
-  /acis status    - View current status
-  /acis discovery - Start feature discovery
-  /acis extract   - Extract goals from PR review
+  /acis status           - View current status
+  /acis discovery        - Start feature discovery
+  /acis extract          - Extract goals from PR review
+  /acis pre-commit-review - Quick design review before committing
 
-Note: Path validation hooks are now ACTIVE. Invalid paths will be BLOCKED.
+Notes:
+  - Path validation hooks are now ACTIVE. Invalid paths will be BLOCKED.
+  - Pre-commit hook will remind you to run /acis pre-commit-review.
+    Skip with: git commit --no-verify
 ```
 
 ## Error Handling
