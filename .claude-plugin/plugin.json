@@ -1,7 +1,7 @@
 {
   "name": "acis",
-  "version": "2.8.0",
-  "description": "Automated Code Improvement System - GENESIS vision-to-architecture framework, Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Pre-Commit Review, Recommendation Routing, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
+  "version": "2.9.0",
+  "description": "Automated Code Improvement System - GENESIS vision-to-architecture framework, Parallel Implementation from GENESIS specs, Implementation Preferences with systemic enforcement, Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Pre-Commit Review, User Feedback, Recommendation Routing, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
   "author": {
     "name": "AIvantage Consulting Inc",
     "url": "https://aivantage-consulting.com"

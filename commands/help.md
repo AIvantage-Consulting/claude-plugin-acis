@@ -32,27 +32,131 @@ You are executing the ACIS help system. This command dynamically discovers and d
    Output in this format:
    ```
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  ACIS v2.1 - Automated Code Improvement System                               ║
-   ║  https://github.com/aivantage-consulting/claude-plugin-acis                  ║
+   ║  ACIS v2.9.0 - Automated Code Improvement System                            ║
+   ║  https://github.com/aivantage-consulting/claude-plugin-acis                 ║
    ╠══════════════════════════════════════════════════════════════════════════════╣
    ║                                                                              ║
-   ║  Available Commands:                                                         ║
+   ║  COMMANDS:                                                                   ║
    ║                                                                              ║
-   ║  /acis:init          Bootstrap ACIS for a new project                       ║
-   ║  /acis:status        Show progress across all goals                          ║
-   ║  /acis:discovery     Multi-perspective investigation                         ║
-   ║  /acis:extract       Extract goals from PR review comments                   ║
-   ║  /acis:remediate     Full TDD remediation pipeline                           ║
-   ║  /acis:resolve       Resolve pending decisions                               ║
-   ║  /acis:verify        Run consensus verification                              ║
-   ║  /acis:audit         Process Auditor - improve ACIS itself                   ║
-   ║  /acis:help          This help (you are here)                                ║
+   ║  /acis:init                Bootstrap ACIS for a project                      ║
+   ║                            Creates .acis-config.json via interview or        ║
+   ║                            doc extraction                                    ║
+   ║                            Example: /acis:init                               ║
    ║                                                                              ║
-   ║  Quick Start:                                                                ║
+   ║  /acis:genesis             Transform vision into system architecture         ║
+   ║                            4-layer agent swarm: Analysis -> Synthesis ->     ║
+   ║                            Challenge -> Arbitrate                            ║
+   ║                            Example: /acis:genesis --output docs/genesis/     ║
+   ║                                                                              ║
+   ║  /acis:implement-parallel  Build subsystems from GENESIS specs in parallel   ║
+   ║                            Uses git worktrees for isolation, merges via      ║
+   ║                            integration branch                                ║
+   ║                            Example: /acis:implement-parallel                 ║
+   ║                                     --genesis docs/genesis/                  ║
+   ║                                                                              ║
+   ║  /acis:discovery           Multi-perspective investigation of a topic        ║
+   ║                            10+ agents analyze in parallel, surfaces          ║
+   ║                            decisions                                         ║
+   ║                            Example: /acis:discovery "offline sync strategy"  ║
+   ║                                     --type feature                           ║
+   ║                                                                              ║
+   ║  /acis:resolve             Resolve pending decisions from discovery          ║
+   ║                            Auto-approves CEO-aligned decisions, prompts      ║
+   ║                            for conflicts                                     ║
+   ║                            Example: /acis:resolve                            ║
+   ║                                     docs/acis/decisions/DISC-*.json          ║
+   ║                                                                              ║
+   ║  /acis:extract             Extract remediation goals from PR review          ║
+   ║                            Generates goal JSON files with detection          ║
+   ║                            commands                                          ║
+   ║                            Example: /acis:extract PR-55                      ║
+   ║                                                                              ║
+   ║  /acis:remediate           Full TDD remediation pipeline for a single goal   ║
+   ║                            Discovery -> Behavioral TDD -> Fix Loop ->       ║
+   ║                            Verification                                      ║
+   ║                            Example: /acis:remediate                          ║
+   ║                                     docs/acis/goals/G1.json                  ║
+   ║                                                                              ║
+   ║  /acis:remediate-parallel  Remediate multiple goals in parallel via          ║
+   ║                            worktrees                                         ║
+   ║                            Isolated execution, integration merge, squash     ║
+   ║                            to main                                           ║
+   ║                            Example: /acis:remediate-parallel G1 G2 G3        ║
+   ║                                                                              ║
+   ║  /acis:verify              Re-run consensus verification for a goal          ║
+   ║                            Independent multi-agent metric verification       ║
+   ║                            Example: /acis:verify                             ║
+   ║                                     docs/acis/goals/G1.json                  ║
+   ║                                                                              ║
+   ║  /acis:pre-commit-review   Quick design review of staged changes             ║
+   ║                            PASS/WARN/BLOCK verdicts, strict mode by          ║
+   ║                            default                                           ║
+   ║                            Example: /acis:pre-commit-review --advisory       ║
+   ║                                                                              ║
+   ║  /acis:audit               Process Auditor - analyze and improve ACIS        ║
+   ║                            Extracts patterns into skills, routes             ║
+   ║                            improvements                                      ║
+   ║                            Example: /acis:audit                              ║
+   ║                                                                              ║
+   ║  /acis:feedback            Report bugs, request features, or give feedback   ║
+   ║                            Submits to GitHub or saves locally                ║
+   ║                            Example: /acis:feedback --type bug_report         ║
+   ║                                                                              ║
+   ║  /acis:status              Show progress across all goals and manifests      ║
+   ║                            Example: /acis:status                             ║
+   ║                                                                              ║
+   ║  /acis:upgrade             Check for and install missing ACIS components     ║
+   ║                            Example: /acis:upgrade                            ║
+   ║                                                                              ║
+   ║  /acis:version             Display installed plugin version                  ║
+   ║                            Example: /acis:version --short                    ║
+   ║                                                                              ║
+   ║  /acis:help                This help system                                  ║
+   ║                            Example: /acis:help remediate                     ║
+   ║                                                                              ║
+   ║  ────────────────────────────────────────────────────────────────────────── ║
+   ║                                                                              ║
+   ║  QUICK START:                                                                ║
    ║    1. /acis:init              (bootstrap project)                            ║
    ║    2. /acis:discovery "topic" (investigate)                                  ║
    ║    3. /acis:remediate <goal>  (fix issues)                                   ║
    ║    4. /acis:status            (track progress)                               ║
+   ║                                                                              ║
+   ║  ────────────────────────────────────────────────────────────────────────── ║
+   ║                                                                              ║
+   ║  WORKFLOW SCENARIOS:                                                         ║
+   ║                                                                              ║
+   ║  Greenfield Project (starting from scratch):                                 ║
+   ║    1. /acis:genesis                    <- Vision -> Architecture             ║
+   ║    2. /acis:init --from-genesis        <- Create project config              ║
+   ║    3. /acis:implement-parallel         <- Build subsystems in parallel       ║
+   ║    4. /acis:pre-commit-review          <- Review before each commit          ║
+   ║    5. /acis:audit                      <- Improve process                    ║
+   ║                                                                              ║
+   ║  Brownfield Project (existing codebase):                                     ║
+   ║    1. /acis:init                       <- Bootstrap with interview/docs      ║
+   ║    2. /acis:extract PR-{N}             <- Extract goals from PR review       ║
+   ║    3. /acis:remediate-parallel G1 G2   <- Fix issues in parallel             ║
+   ║    4. /acis:audit                      <- Learn from remediations            ║
+   ║                                                                              ║
+   ║  Feature Development:                                                        ║
+   ║    1. /acis:discovery "topic"          <- Surface decisions                  ║
+   ║    2. /acis:resolve manifest.json      <- Resolve decisions                  ║
+   ║    3. /acis:remediate goal.json        <- Implement with TDD                 ║
+   ║    4. /acis:verify goal.json           <- Verify independently               ║
+   ║                                                                              ║
+   ║  Ongoing Maintenance:                                                        ║
+   ║    1. /acis:pre-commit-review          <- Every commit                       ║
+   ║    2. /acis:extract PR-{N}             <- After PR review                    ║
+   ║    3. /acis:remediate goal.json        <- Fix findings                       ║
+   ║    4. /acis:audit                      <- Periodic improvement               ║
+   ║                                                                              ║
+   ║  Quick Bug Fix:                                                              ║
+   ║    1. /acis:extract PR-{N}             <- Extract the issue                  ║
+   ║    2. /acis:remediate goal.json        <- Fast fix                           ║
+   ║       --no-behavioral                                                        ║
+   ║                                                                              ║
+   ║  ────────────────────────────────────────────────────────────────────────── ║
    ║                                                                              ║
    ║  For detailed help on a command: /acis:help <command>                        ║
    ║  Example: /acis:help remediate                                               ║
@@ -164,14 +268,21 @@ When presenting commands, use these display names:
 | File Name | Display Name | Short Description |
 |-----------|--------------|-------------------|
 | `help.md` | `/acis:help` | Dynamic help system |
-| `acis-init.md` or `init.md` | `/acis:init` | Bootstrap ACIS for a new project |
-| `status.md` | `/acis:status` | Show progress across all goals |
+| `acis-init.md` or `init.md` | `/acis:init` | Bootstrap ACIS for a project |
+| `genesis.md` | `/acis:genesis` | Transform vision into system architecture |
+| `implement-parallel.md` | `/acis:implement-parallel` | Build subsystems from GENESIS specs in parallel |
+| `status.md` | `/acis:status` | Show progress across all goals and manifests |
 | `discovery.md` | `/acis:discovery` | Multi-perspective investigation |
 | `extract.md` | `/acis:extract` | Extract goals from PR review |
 | `remediate.md` | `/acis:remediate` | Full TDD remediation pipeline |
+| `remediate-parallel.md` | `/acis:remediate-parallel` | Parallel remediation via worktrees |
 | `resolve.md` | `/acis:resolve` | Resolve pending decisions |
 | `verify.md` | `/acis:verify` | Run consensus verification |
+| `pre-commit-review.md` | `/acis:pre-commit-review` | Quick design review of staged changes |
 | `acis-audit.md` or `audit.md` | `/acis:audit` | Process Auditor |
+| `feedback.md` | `/acis:feedback` | Report bugs, request features, give feedback |
+| `upgrade.md` | `/acis:upgrade` | Check for and install missing components |
+| `version.md` | `/acis:version` | Display installed plugin version |
 
 ## Installation Status Check
 
@@ -180,6 +291,8 @@ Also check and report:
 1. **Plugin Status**
    ```bash
    # Check if plugin is loaded via --plugin-dir or installed
+   plugin_version=$(jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null || echo "unknown")
+   echo "ACIS v${plugin_version}"
    echo "Plugin loaded from: ${CLAUDE_PLUGIN_ROOT}"
    ```
 
@@ -208,6 +321,7 @@ Also check and report:
 - Use consistent indentation (2 spaces)
 - Highlight important commands with emphasis
 - Include "Quick Start" section for new users
+- Include "Workflow Scenarios" section with chained command examples
 - Always end with pointer to detailed help
 
 ## Error Handling

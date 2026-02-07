@@ -12,6 +12,41 @@ AI-generated code is often poor quality because macro/micro decisions are made i
 
 ## Workflow
 
+### Phase 0: INTENT ANCHORING (Ask Before Analyzing)
+
+Before spawning any agent, capture what the user actually wants from this discovery:
+
+1. **Ask user via AskUserQuestion** with these options:
+   - **What do you want to learn?** (multiSelect: true)
+     - "Implementation approach" — how to build this
+     - "Risk assessment" — what could go wrong
+     - "Decision mapping" — what needs to be decided
+     - "Impact analysis" — what this affects
+   - **Any constraints that matter?** (open text, optional)
+   - **Preferred output format?**
+     - "Full report" (all artifacts)
+     - "Decisions only" (manifest + decisions)
+     - "Quick summary" (report only)
+
+2. **Record intent** to `${config.paths.state}/discovery-intent-{topic}.json`:
+   ```json
+   {
+     "topic": "{topic}",
+     "intent": ["implementation", "risk"],
+     "constraints": "Must work offline, no new dependencies",
+     "output_preference": "full_report",
+     "captured_at": "{timestamp}"
+   }
+   ```
+
+3. **Weight agent perspectives by intent**:
+   - Risk-focused → boost `security-privacy` weight to 1.5, boost `oracle-resilience` to 1.3
+   - Implementation-focused → boost `tech-lead` weight to 1.5, boost `mobile-lead` to 1.3
+   - Decision-mapping → boost all CEO weights, equal agent weights
+   - Impact-analysis → boost `oracle-enduser` to 1.5, boost `devops-lead` to 1.3
+
+Skip Phase 0 with `--skip-intent-capture` to use default equal weights.
+
 ### Phase 1: SCOPE ANALYSIS
 
 Parse the topic to determine:
@@ -33,6 +68,25 @@ Parse the topic to determine:
    - What's explicitly out of scope
 
 Write scope to: `${config.paths.state}/discovery-scope.md`
+
+### Phase 1.5: INCREMENTAL CHANGE DETECTION (if `--incremental`)
+
+When `--incremental` flag is set and a previous discovery exists for this topic:
+
+1. **Find previous discovery**: Look for `${config.paths.discovery}/DISC-*-{topic}.json`
+2. **Compute changed files**: `git diff --name-only` since the previous discovery's timestamp
+3. **Map files to perspectives**: Use `${CLAUDE_PLUGIN_ROOT}/configs/acis-perspectives.json` to map:
+   - Files in `security/`, `auth/`, `encryption/` → `security-privacy` perspective
+   - Files in `test/`, `spec/`, `__tests__/` → `test-lead` perspective
+   - Files in `mobile/`, `ios/`, `android/` → `mobile-lead` perspective
+   - Files in `sync/`, `offline/`, `queue/` → `devops-lead`, `mobile-lead` perspectives
+   - Files matching `*.ts`, `*.tsx` with architecture changes → `tech-lead` perspective
+   - All other changes → `tech-lead` perspective (default)
+4. **Filter agents**: Only re-spawn agents whose perspective scope was affected
+5. **Merge results**: Combine new findings into existing manifest, preserving unchanged sections
+6. **Report**: Show which perspectives were re-run and which were preserved
+
+If no previous discovery exists, fall back to full discovery (ignore `--incremental`).
 
 ### Phase 2: MULTI-PERSPECTIVE EXPLORATION (Parallel Fresh Agents)
 
@@ -101,18 +155,52 @@ For each **pending** decision, get independent recommendations:
 - How does this decision uphold engineering principles?
 - Testability, observability, failure modes, tech debt
 
-### Phase 5: CONVERGENCE DETECTION
+### Phase 5: CONVERGENCE DETECTION & TRANSPARENCY
 
 ```
 If CEO-Alpha.recommendation == CEO-Beta.recommendation:
-  → Auto-resolvable (no human needed)
-  → Mark for auto-approval in resolve phase
+  → CONVERGED: Both CEOs agree
+  → Present to user for batch approval (NOT silent auto-resolve)
 
 If CEO-Alpha.recommendation != CEO-Beta.recommendation:
+  → DIVERGED: CEOs disagree
   → Must surface to project owner
   → Capture both dissent points
   → Requires human judgment
 ```
+
+#### Converged Decision Transparency (MANDATORY)
+
+When converged decisions are detected, present them to the user instead of silently auto-resolving:
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║  CONVERGED DECISIONS (Both CEOs agree)                            ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  The following decisions were aligned:                            ║
+║                                                                   ║
+║  1. DEC-SYNC-002: Conflict Resolution → CRDT                    ║
+║     Alpha: "CRDT for AI coherence"                               ║
+║     Beta:  "CRDT for deterministic testability"                  ║
+║                                                                   ║
+║  2. DEC-AUTH-001: Token Storage → Secure Enclave                 ║
+║     Alpha: "Enclave for PHI protection"                          ║
+║     Beta:  "Enclave for HIPAA audit trail"                       ║
+║                                                                   ║
+║  3. DEC-CACHE-001: Cache Strategy → LRU with TTL                ║
+║     Alpha: "LRU+TTL for context freshness"                      ║
+║     Beta:  "LRU+TTL for memory predictability"                  ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+```
+
+Use AskUserQuestion with options:
+- **"Accept All"** — Approve all converged decisions at once (preserves velocity)
+- **"Review Each"** — Step through each decision individually for detailed review
+- **"Reject and Re-analyze"** — Discard and re-run with different constraints
+
+This ensures the user always knows what was decided, even when CEOs agree.
 
 ### Phase 6: MANIFEST & ARTIFACT GENERATION
 
@@ -139,6 +227,8 @@ If CEO-Alpha.recommendation != CEO-Beta.recommendation:
 | `--parallel` | Run all perspectives in parallel (default: ON) |
 | `--output <artifacts>` | Comma-separated: report, manifest, spec, goals, adr (default: all) |
 | `--no-ceo` | Skip Dual-CEO validation phase |
+| `--skip-intent-capture` | Skip Phase 0 intent anchoring, use default equal weights |
+| `--incremental` | Only re-run agents whose scope was affected by changes since last discovery |
 
 ## Output Report Format
 

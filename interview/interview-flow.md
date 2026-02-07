@@ -120,6 +120,60 @@ For open-ended questions, provide example options:
 - Common patterns in similar projects
 - "Other" for custom input
 
+## Answer Quality Gates
+
+Before accepting each answer, validate against quality rules:
+
+### Validation Rules by Question Type
+
+| Question Type | Validation Rule | Rejection Message |
+|---------------|----------------|-------------------|
+| Open-ended (problem, solution) | Answer must be 5+ words | "Could you elaborate? I need at least a sentence to capture this properly." |
+| Persona name | Must be 2+ words OR a proper noun (capitalized) | "Please provide a specific name (e.g., 'Dr. Sarah Chen' or 'Brenda')." |
+| Problem statement | Must be 10+ words AND contain a verb | "A problem statement needs to describe what happens. Can you expand?" |
+| Role description | Must be 2+ words | "Please describe the role more specifically (e.g., 'elderly patient' or 'night-shift nurse')." |
+
+### Generic Answer Detection
+
+Reject answers matching these patterns (case-insensitive):
+- `^(stuff|things|various|misc|etc|idk|dunno|whatever)$`
+- `^(yes|no|maybe|sure|ok|okay)$` (when question type is `open`)
+- `^.{0,4}$` (any answer under 5 characters for open questions)
+
+### Quality Gate Flow
+
+```
+IF answer fails quality validation:
+  IF retryCount < 2:
+    Present specific rejection message
+    Ask question again with guidance
+    Increment retryCount
+  ELSE:
+    Accept answer as-is
+    Set quality_flag: "low" on the extracted data field
+    Log: "Low quality answer accepted after 2 retries for {question_id}"
+    Move to next question
+```
+
+### Quality Flags
+
+Track quality flags in interview state:
+
+```json
+{
+  "qualityFlags": {
+    "G1": "high",
+    "G2": "low",
+    "G5": "medium"
+  }
+}
+```
+
+Quality levels:
+- `high`: Passed validation on first attempt
+- `medium`: Passed after 1 follow-up
+- `low`: Accepted after max retries without passing validation
+
 ## Follow-up Logic
 
 ```
@@ -129,6 +183,7 @@ IF answer is vague:
     Increment followUpCount
   ELSE:
     Accept answer as-is
+    Set quality_flag: "low"
     Move to next question
 ```
 

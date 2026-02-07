@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "acis-intent-contract.schema.json",
+  "title": "ACIS Intent Contract",
+  "description": "Records user intent and success criteria at remediation start. Used for end-to-end intent verification: 'You asked for X. We delivered Y. All criteria met: yes/no.'",
+  "type": "object",
+  "required": ["goal_id", "user_statement", "system_interpretation", "user_confirmed", "success_criteria", "captured_at"],
+  "properties": {
+    "goal_id": {
+      "type": "string",
+      "description": "The goal this intent contract is for",
+      "pattern": "^[A-Z0-9]+-[A-Z]+-[0-9]+-[a-z0-9-]+$"
+    },
+    "user_statement": {
+      "type": "string",
+      "description": "User's verbatim statement of what they want achieved",
+      "minLength": 10
+    },
+    "system_interpretation": {
+      "type": "string",
+      "description": "System's plain-language interpretation of the user's intent",
+      "minLength": 10
+    },
+    "user_confirmed": {
+      "type": "boolean",
+      "description": "Whether the user confirmed the system interpretation is correct"
+    },
+    "clarification_rounds": {
+      "type": "integer",
+      "description": "Number of clarification rounds needed (0 = first try, max 2)",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 0
+    },
+    "success_criteria": {
+      "type": "array",
+      "description": "Verification commands that prove the intent was delivered",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["criterion_id", "description", "verification_command", "expected_result"],
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "description": "Unique identifier for this criterion",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what this criterion verifies",
+            "minLength": 5
+          },
+          "verification_command": {
+            "type": "string",
+            "description": "Shell command that outputs the value to verify (Bash 3.2 compatible)",
+            "minLength": 5
+          },
+          "expected_result": {
+            "type": "string",
+            "description": "Expected output of the verification command"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": ["eq", "contains", "not_contains", "gte", "lte", "gt", "lt"],
+            "default": "eq",
+            "description": "How to compare actual vs expected"
+          },
+          "parse_type": {
+            "type": "string",
+            "enum": ["string", "integer", "float", "boolean"],
+            "default": "string"
+          }
+        }
+      }
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the intent contract was captured"
+    },
+    "verification_result": {
+      "type": "object",
+      "description": "Filled in at Phase FINAL when intent is verified",
+      "properties": {
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "criteria_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion_id": { "type": "string" },
+              "actual_result": { "type": "string" },
+              "expected_result": { "type": "string" },
+              "passed": { "type": "boolean" },
+              "notes": { "type": "string" }
+            }
+          }
+        },
+        "all_passed": {
+          "type": "boolean",
+          "description": "Whether all success criteria were met"
+        },
+        "user_accepted": {
+          "type": "boolean",
+          "description": "Whether user accepted the result (even if some criteria failed)"
+        }
+      }
+    }
+  }
+}

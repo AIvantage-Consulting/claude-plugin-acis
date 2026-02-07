@@ -323,6 +323,19 @@ Domain modeling questions to resolve:
 2. **{Question}**: Affects {what}
 ```
 
+## Structured JSON Output (MANDATORY)
+
+In addition to the markdown output above, you MUST include a ` ```json ``` ` block conforming to `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-events-output.schema.json`.
+
+The JSON block must contain:
+- `domain_events[]`: Array of event objects with id (EVT-001...), name (past tense), trigger, aggregate, data_payload
+- `commands[]`: Array of command objects with id (CMD-001...), name (imperative), actor, target_aggregate
+- `aggregates[]`: Array of aggregate objects with invariants and owned events
+- `read_models[]`: Array of read model objects with purpose and source events
+- `analysis_metadata`: Agent ID, timestamp, confidence level
+
+This structured output enables the Synthesis Agent (Layer 2) to consume validated data instead of parsing markdown heuristically.
+
 ## Analysis Guidelines
 
 ### DO:

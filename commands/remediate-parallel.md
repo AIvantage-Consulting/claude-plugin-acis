@@ -250,14 +250,28 @@ For each goal (in parallel via separate Task agents):
 
    Total: ${files_changed} files, ${insertions}+, ${deletions}-"
 
-4. CLEANUP WORKTREES
+4. AUTOMATIC WORKTREE CLEANUP
    for goal_id in batch.goals:
-     if goal.status == complete:
+     if goal.status == 'achieved':
+       # Achieved goals: auto-cleanup
        git worktree remove .acis-work/${goal_id}
        git branch -d acis/${goal_id}
+       log("Cleaned up worktree: ${goal_id} (achieved)")
+     elif goal.status == 'blocked':
+       # Blocked goals: prompt user
+       AskUserQuestion: "Goal ${goal_id} is blocked. Keep worktree for debugging?"
+       if user_says_keep:
+         log("Preserving worktree for debugging: ${goal_id}")
+       else:
+         git worktree remove .acis-work/${goal_id}
+         git branch -d acis/${goal_id}
+         log("Cleaned up blocked worktree: ${goal_id}")
      else:
-       # Preserve for debugging
-       log("Preserving worktree: ${goal_id}")
+       # Other states (deferred, in_progress): preserve
+       log("Preserving worktree: ${goal_id} (status: ${goal.status})")
+
+   # Prune stale worktree references
+   git worktree prune
 
    git branch -d acis/integrate-${WO}-batch-${NNN}
 
@@ -284,6 +298,7 @@ For each goal (in parallel via separate Task agents):
 | `--max-parallel <n>` | Limit concurrent worktrees (default: 4) |
 | `--step-size <n>` | Max files per step (default: 3) |
 | `--preserve-worktrees` | Don't cleanup worktrees after success |
+| `--cleanup` | Manual worktree sweep: remove all achieved worktrees, prompt for blocked, prune stale refs |
 | `--skip-squash` | Leave as merge commits on main (no squash) |
 | `--push-branches` | Push goal branches to origin for backup |
 | `--skip-tests` | Skip test suite during verification |

@@ -307,6 +307,8 @@ mcp__codex__codex(prompt="CEO-Beta...", sandbox="read-only")
 | `verify <goal-file>` | Run consensus verification only |
 | `pre-commit-review` | Quick design review of staged changes before commit |
 | `audit` | Process Auditor: analyze patterns, generate skills, improve ACIS itself |
+| `implement-parallel` | Build subsystems from GENESIS specs in parallel via worktrees |
+| `feedback` | Report bugs, request features, or give general feedback |
 | `upgrade` | Check for and install missing ACIS components |
 | `version` | Display installed plugin version |
 
@@ -347,6 +349,25 @@ Check for and install missing components:
 - Detects missing hooks (path validator, pre-commit)
 - Installs missing components with user confirmation
 - Updates config version marker
+
+### `/acis implement-parallel`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/implement-parallel.md`
+
+Build subsystems from GENESIS architecture specs in parallel:
+- Reads GENESIS output (SUBSYSTEMS_DRAFT.md, ARCHITECTURE_DRAFT.md, ADRs)
+- Generates implementation specs per subsystem
+- Builds subsystems in isolated git worktrees
+- Merges via integration branch in dependency order
+- Squash to main with full verification
+
+### `/acis feedback`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/feedback.md`
+
+Report bugs, request features, or give general feedback:
+- Interactive guided flow with type, title, description
+- Auto-collects environment context (version, OS, config status)
+- Submits to GitHub Issues or saves locally
+- `--submit-pending` to batch-submit local feedback
 
 ### `/acis version`
 Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/version.md`

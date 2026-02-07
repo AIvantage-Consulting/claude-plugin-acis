@@ -107,13 +107,27 @@ MODE: Advisory (read-only)
 #### Verdict
 **[APPROVE | REQUEST_CHANGES]**
 
-#### Quality Score
-[1-5] where:
-- 5: Exemplary - could be used as reference implementation
-- 4: Good - minor improvements possible but not blocking
-- 3: Acceptable - achieves goal but has notable issues
-- 2: Needs Work - significant issues that should be addressed
-- 1: Reject - fundamental problems requiring rework
+#### Quality Score (Deterministic Rubric)
+
+**Formula**: Start at 5, subtract by issue severity:
+- Each **BLOCKING** issue: -2 points
+- Each **IMPORTANT** issue: -1 point
+- Each **MINOR** issue: -0.5 points
+- Floor: 1 (minimum score)
+
+**Calculation**: `score = max(1, 5 - (2 × BLOCKING_count) - (1 × IMPORTANT_count) - (0.5 × MINOR_count))`
+
+**Threshold** (default: 3): Score >= 3 → APPROVE, Score < 3 → REQUEST_CHANGES
+- Score 3 means: at most 2 IMPORTANT issues and 0 BLOCKING issues, OR equivalent
+- Two reviewers classifying the same issues MUST arrive at the same score
+
+**Issue Classification Rules** (for deterministic classification):
+- **BLOCKING**: Security vulnerability, data loss risk, crashes, HIPAA violation, test deletion, breaks existing functionality
+- **IMPORTANT**: SOLID violation, DRY violation with 3+ repetitions, O(n²) when O(n) possible, missing error handling on external calls, layer boundary violation
+- **MINOR**: Naming convention inconsistency, missing JSDoc on public API, single magic number, redundant type assertion
+
+[Computed Score]: {score}
+[Issue Counts]: BLOCKING={blocking_count}, IMPORTANT={important_count}, MINOR={minor_count}
 
 #### SOLID/DRY Assessment
 | Principle | Pass/Concern |

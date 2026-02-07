@@ -115,11 +115,24 @@ Output a structured checkpoint:
 - [file or area to target next]
 ```
 
+### Phase 5.5: STUCK DETECTION (Algorithmic)
+
+After REPORT, analyze the last 3 measurement values to detect stuck patterns:
+
+| Pattern | Detection Rule | Action |
+|---------|---------------|--------|
+| **PLATEAU** | Last 3 values are identical (e.g., 5, 5, 5) | **HARD_STUCK** → Output `<promise>GOAL_{{GOAL_ID}}_HARD_STUCK</promise>` with recommendation to escalate to Codex consultation |
+| **REGRESSION** | Current value > previous value (getting worse) | **REGRESSION** → Trigger 5-WHYs root cause analysis before next FIX |
+| **DIMINISHING_RETURNS** | Delta < 2 for each of last 3 iterations (e.g., -1, -1, -1) | **SLOW_PROGRESS** → WARN: "Progress slowing (delta < 2 for 3 iterations). Consider escalating or changing approach." |
+
+This replaces the fixed "3 iterations no progress" check with algorithmic analysis.
+
 ### Phase 6: LOOP DECISION
 
-- If new*count <= {{TARGET_COUNT}}: Output `<promise>GOAL*{{GOAL_ID}}\_ACHIEVED</promise>`
-- If new_count > {{TARGET_COUNT}}: Continue to next iteration
-- If stuck (no progress for 3 iterations): Output `<promise>GOAL_{{GOAL_ID}}_BLOCKED</promise>` with explanation
+- If new_count <= {{TARGET_COUNT}}: Output `<promise>GOAL_{{GOAL_ID}}_ACHIEVED</promise>`
+- If HARD_STUCK detected: Output `<promise>GOAL_{{GOAL_ID}}_HARD_STUCK</promise>` with analysis
+- If new_count > {{TARGET_COUNT}} and not stuck: Continue to next iteration
+- If max iterations reached: Output `<promise>GOAL_{{GOAL_ID}}_MAX_ITERATIONS</promise>` with explanation
 
 ## Safety Rules
 
@@ -133,6 +146,7 @@ Output a structured checkpoint:
 
 - Success: `<promise>GOAL_{{GOAL_ID}}_ACHIEVED</promise>`
 - Blocked: `<promise>GOAL_{{GOAL_ID}}_BLOCKED</promise>`
+- Hard stuck (plateau): `<promise>GOAL_{{GOAL_ID}}_HARD_STUCK</promise>`
 - Max iterations reached: `<promise>GOAL_{{GOAL_ID}}_MAX_ITERATIONS</promise>`
 
 ````

@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIS State Transition Matrix",
+  "description": "Defines legal state transitions for goal remediation pipeline. Any transition not listed here is ILLEGAL and must be rejected with an error trace.",
+  "version": "1.0.0",
+  "states": [
+    "pending",
+    "discovery",
+    "behavioral_tdd",
+    "ralph_loop",
+    "verification",
+    "quality_gate",
+    "achieved",
+    "blocked",
+    "deferred",
+    "verified_acceptable"
+  ],
+  "transitions": {
+    "pending": {
+      "allowed_next": ["discovery", "ralph_loop", "deferred"],
+      "notes": "pending→ralph_loop only valid for Tier 1 fast-path (skip discovery/behavioral)"
+    },
+    "discovery": {
+      "allowed_next": ["behavioral_tdd", "ralph_loop", "blocked", "deferred"],
+      "notes": "discovery→ralph_loop valid when --no-behavioral flag is set"
+    },
+    "behavioral_tdd": {
+      "allowed_next": ["ralph_loop", "blocked"],
+      "notes": "behavioral_tdd always proceeds to ralph_loop or blocks"
+    },
+    "ralph_loop": {
+      "allowed_next": ["verification", "blocked", "ralph_loop"],
+      "notes": "ralph_loop→ralph_loop represents iteration within the loop; exits to verification or blocked"
+    },
+    "verification": {
+      "allowed_next": ["quality_gate", "ralph_loop", "blocked", "achieved"],
+      "notes": "verification→achieved only valid when --skip-quality-gate is set; verification→ralph_loop on REQUEST_CHANGES"
+    },
+    "quality_gate": {
+      "allowed_next": ["achieved", "ralph_loop", "blocked"],
+      "notes": "quality_gate→ralph_loop on REQUEST_CHANGES; quality_gate→blocked after 2 rejections"
+    },
+    "achieved": {
+      "allowed_next": ["verified_acceptable"],
+      "notes": "achieved is terminal; verified_acceptable is a post-achievement audit state"
+    },
+    "blocked": {
+      "allowed_next": ["pending", "discovery", "ralph_loop", "deferred"],
+      "notes": "blocked can be unblocked by user intervention back to appropriate phase"
+    },
+    "deferred": {
+      "allowed_next": ["pending"],
+      "notes": "deferred goals can be re-activated to pending"
+    },
+    "verified_acceptable": {
+      "allowed_next": [],
+      "notes": "Terminal state - goal verified acceptable after achievement"
+    }
+  },
+  "validation_rules": {
+    "on_illegal_transition": {
+      "action": "abort",
+      "message_template": "ILLEGAL STATE TRANSITION: {current_state} → {attempted_state}. Legal transitions from {current_state}: [{allowed_states}]. Aborting pipeline.",
+      "emit_trace": true,
+      "trace_level": "ERROR"
+    },
+    "enforcement": "strict",
+    "bypass_flag": "--force-state-transition"
+  },
+  "phase_to_state_mapping": {
+    "Phase 0": "pending",
+    "Phase 1": "discovery",
+    "Phase 2": "behavioral_tdd",
+    "Phase 3": "ralph_loop",
+    "Phase 4": "verification",
+    "Phase 4.5": "quality_gate",
+    "Complete": "achieved"
+  }
+}

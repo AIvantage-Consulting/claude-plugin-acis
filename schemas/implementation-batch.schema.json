@@ -1,0 +1,445 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "implementation-batch.schema.json",
+  "title": "ACIS Implementation Batch State",
+  "description": "Schema for tracking parallel implementation batch state from GENESIS specs",
+  "type": "object",
+  "required": ["batch_id", "project_name", "status", "baseline", "specs"],
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "pattern": "^IMPL-[a-zA-Z0-9-]+-[0-9]{3}$",
+      "description": "Unique batch identifier (e.g., IMPL-careai-001)"
+    },
+    "project_name": {
+      "type": "string",
+      "description": "Project name for this implementation batch"
+    },
+    "genesis_dir": {
+      "type": "string",
+      "description": "Path to GENESIS output directory used as source"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["spec_extraction", "planning", "executing", "merging", "verifying", "complete", "failed", "partial"],
+      "description": "Current batch execution status"
+    },
+    "baseline": {
+      "type": "object",
+      "required": ["commit", "branch"],
+      "description": "Baseline state before implementation",
+      "properties": {
+        "commit": {
+          "type": "string",
+          "description": "Git commit hash of baseline"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Branch name for baseline"
+        },
+        "verified_clean": {
+          "type": "boolean",
+          "description": "Whether baseline was verified as clean before starting"
+        }
+      }
+    },
+    "specs": {
+      "type": "array",
+      "description": "Implementation specs included in this batch",
+      "items": {
+        "type": "object",
+        "required": ["spec_id", "subsystem_name", "status"],
+        "properties": {
+          "spec_id": {
+            "type": "string",
+            "description": "ACIS implementation spec identifier"
+          },
+          "subsystem_name": {
+            "type": "string",
+            "description": "Human-readable subsystem name"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "worktree_created", "executing", "complete", "failed", "blocked", "deferred"],
+            "description": "Spec execution status within batch"
+          },
+          "worktree_path": {
+            "type": "string",
+            "description": "Path to spec's worktree (e.g., .acis-work/impl/SPEC-auth-service/)"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch for spec (e.g., acis/impl/SPEC-auth-service)"
+          },
+          "steps_total": {
+            "type": "integer",
+            "description": "Total number of steps for spec"
+          },
+          "steps_complete": {
+            "type": "integer",
+            "description": "Number of steps completed"
+          },
+          "complexity_tier": {
+            "type": "string",
+            "enum": ["1", "2", "3"]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if failed"
+          }
+        }
+      }
+    },
+    "dependency_graph": {
+      "type": "object",
+      "description": "Dependency graph for implementation ordering",
+      "properties": {
+        "topological_order": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Spec IDs in topological sort order (build order)"
+        },
+        "parallel_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["group_id", "specs"],
+            "properties": {
+              "group_id": {
+                "type": "integer",
+                "description": "Parallel group identifier (lower = execute first)"
+              },
+              "specs": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Spec IDs that can run in parallel within this group"
+              },
+              "depends_on_groups": {
+                "type": "array",
+                "items": { "type": "integer" },
+                "description": "Groups that must complete before this group starts"
+              }
+            }
+          },
+          "description": "Specs grouped by dependency level for parallel execution"
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": { "type": "string", "description": "Dependency spec ID" },
+              "to": { "type": "string", "description": "Dependent spec ID" }
+            }
+          },
+          "description": "Dependency edges: 'from' must complete before 'to' starts"
+        }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "description": "Integration branch state",
+      "properties": {
+        "branch": {
+          "type": "string",
+          "description": "Integration branch name (e.g., acis/integrate-impl-careai-001)"
+        },
+        "base_commit": {
+          "type": "string",
+          "description": "Commit integration started from"
+        },
+        "current_commit": {
+          "type": "string",
+          "description": "Current HEAD of integration branch"
+        },
+        "specs_merged": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Spec IDs successfully merged"
+        },
+        "specs_pending": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Spec IDs not yet merged"
+        },
+        "verification_status": {
+          "type": "string",
+          "enum": ["pending", "running", "passed", "failed"]
+        },
+        "cross_subsystem_tests": {
+          "type": "string",
+          "enum": ["pending", "passed", "failed", "skipped"],
+          "description": "Status of cross-subsystem integration tests"
+        }
+      }
+    },
+    "merge_to_main": {
+      "type": "object",
+      "description": "Final squash merge to main",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["squash", "merge", "rebase"],
+          "default": "squash"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "complete", "failed", "skipped"]
+        },
+        "commit": {
+          "type": "string",
+          "description": "Squash commit hash on main"
+        },
+        "squashed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "history_preservation": {
+      "type": "object",
+      "description": "Git tags for history preservation before cleanup",
+      "properties": {
+        "integration_tag": {
+          "type": "string",
+          "description": "Tag for integration branch (e.g., acis/history/IMPL-careai-001)"
+        },
+        "spec_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for individual spec branches"
+        },
+        "retention_days": {
+          "type": "integer",
+          "default": 30
+        },
+        "cleanup_after": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "implementation_preferences": {
+      "type": "object",
+      "description": "User preferences collected during Phase 0.1 interview. Split into 'what' (scope) and 'how' (coding). Every 'how' preference is enforced after each step.",
+      "properties": {
+        "scope": {
+          "type": "object",
+          "description": "WHAT to build — scope, priorities, MVP boundaries",
+          "properties": {
+            "mvpSelection": { "type": "string", "enum": ["all-subsystems", "core-only", "manual-select"] },
+            "selectedSubsystems": { "type": "array", "items": { "type": "string" } },
+            "deferredSubsystems": { "type": "array", "items": { "type": "string" } },
+            "priorityStrategy": { "type": "string", "enum": ["dependency-order", "value-first", "risk-first", "inside-out"] },
+            "stubStrategy": { "type": "string", "enum": ["interface-stubs", "mock-implementations", "no-stubs"] },
+            "featureFlags": { "type": "string", "enum": ["environment-flags", "config-flags", "no-flags", "flag-service"] },
+            "deliverables": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "codingStyle": {
+          "type": "object",
+          "description": "HOW — coding conventions (enforced)",
+          "properties": {
+            "fileNaming": { "type": "string", "enum": ["kebab-case", "camelCase", "PascalCase", "snake_case"] },
+            "codeOrganization": { "type": "string", "enum": ["feature-based", "layer-based", "hybrid"] },
+            "importStyle": { "type": "string", "enum": ["path-aliases", "relative", "package-imports"] },
+            "exportStyle": { "type": "string", "enum": ["named-exports", "mixed-exports", "barrel-exports"] }
+          }
+        },
+        "errorHandling": {
+          "type": "object",
+          "description": "HOW — error handling (enforced)",
+          "properties": {
+            "strategy": { "type": "string", "enum": ["typed-errors", "result-type", "error-codes", "mixed"] }
+          }
+        },
+        "logging": {
+          "type": "object",
+          "description": "HOW — logging approach (enforced)",
+          "properties": {
+            "approach": { "type": "string", "enum": ["structured-logger", "console-levels", "debug-namespaced", "minimal"] }
+          }
+        },
+        "debugging": {
+          "type": "object",
+          "description": "HOW — debug tracing (enforced)",
+          "properties": {
+            "traceLevel": { "type": "string", "enum": ["boundary-tracing", "comprehensive", "error-only", "conditional"] }
+          }
+        },
+        "designPrinciples": {
+          "type": "object",
+          "description": "HOW — design principles (enforced)",
+          "properties": {
+            "solidAdherence": { "type": "string", "enum": ["pragmatic-solid", "strict-solid", "relaxed-solid"] },
+            "dryStrategy": { "type": "string", "enum": ["rule-of-three", "strict-dry", "wet"] }
+          }
+        },
+        "testing": {
+          "type": "object",
+          "description": "HOW — testing strategy (enforced)",
+          "properties": {
+            "strategy": { "type": "string", "enum": ["test-alongside", "test-first", "integration-first", "minimal-tests"] },
+            "framework": { "type": "string", "enum": ["vitest", "jest", "node-test", "match-existing"] }
+          }
+        },
+        "platform": {
+          "type": "object",
+          "description": "HOW — platform and language (enforced)",
+          "properties": {
+            "language": { "type": "string", "enum": ["typescript-strict", "typescript-standard", "javascript-jsdoc", "javascript"] },
+            "packageManager": { "type": "string", "enum": ["pnpm", "npm", "yarn", "bun"] }
+          }
+        }
+      }
+    },
+    "enforcement_ruleset": {
+      "type": "array",
+      "description": "Concrete verification checks derived from implementation_preferences. Built during Phase 0.1 and executed after every step in Phase 2.",
+      "items": {
+        "type": "object",
+        "required": ["check_id", "preference_key", "preference_value", "type", "pass_condition"],
+        "properties": {
+          "check_id": {
+            "type": "string",
+            "description": "Unique check identifier (e.g., codingStyle.fileNaming)"
+          },
+          "preference_key": {
+            "type": "string",
+            "description": "Dot-path to the preference (e.g., codingStyle.fileNaming)"
+          },
+          "preference_value": {
+            "type": "string",
+            "description": "User's chosen value (e.g., kebab-case)"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["shell", "agent-review"],
+            "description": "Whether this check runs a shell command or requires agent self-review"
+          },
+          "command": {
+            "type": "string",
+            "description": "Shell command to run (Bash 3.2 compatible). Only for type=shell."
+          },
+          "criteria": {
+            "type": "string",
+            "description": "Review criteria description. Only for type=agent-review."
+          },
+          "pass_condition": {
+            "type": "string",
+            "description": "What constitutes a passing result (e.g., 'output is empty', 'count is 0')"
+          },
+          "fix_instruction": {
+            "type": "string",
+            "description": "Instruction given to agent when check fails"
+          }
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "description": "Compliance tracking — records how well preferences were followed across all steps",
+      "properties": {
+        "total_checks_run": { "type": "integer", "default": 0 },
+        "total_checks_passed": { "type": "integer", "default": 0 },
+        "total_checks_fixed": {
+          "type": "integer",
+          "default": 0,
+          "description": "Checks that failed initially but were fixed by the agent on retry"
+        },
+        "total_checks_blocked": {
+          "type": "integer",
+          "default": 0,
+          "description": "Checks that could not be fixed after max retries"
+        },
+        "compliance_score": {
+          "type": "number",
+          "description": "Overall compliance percentage (0-100)"
+        },
+        "per_preference": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "preference": { "type": "string" },
+              "checks_run": { "type": "integer" },
+              "passed": { "type": "integer" },
+              "fixed": { "type": "integer" },
+              "blocked": { "type": "integer" }
+            }
+          }
+        },
+        "blocked_steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step_id": { "type": "string" },
+              "spec_id": { "type": "string" },
+              "violations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "check": { "type": "string" },
+                    "preference": { "type": "string" },
+                    "violation": { "type": "string" },
+                    "files": { "type": "array", "items": { "type": "string" } },
+                    "attempts": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "description": "Steps that were blocked after max retry attempts"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "max_parallel": {
+          "type": "integer",
+          "default": 4,
+          "description": "Maximum concurrent worktrees"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "specs_only": {
+          "type": "boolean",
+          "description": "Whether only specs were generated (no execution)"
+        },
+        "skip_tests": {
+          "type": "boolean"
+        },
+        "skip_interview": {
+          "type": "boolean",
+          "description": "Whether the preference interview was skipped"
+        },
+        "subsystem_filter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Subset of subsystems being implemented (if --subsystems used)"
+        }
+      }
+    }
+  }
+}

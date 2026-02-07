@@ -368,6 +368,18 @@ Need more research on:
 | {system} | {urls, review sites, etc.} |
 ```
 
+## Structured JSON Output (MANDATORY)
+
+In addition to the markdown output above, you MUST include a ` ```json ``` ` block conforming to `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-similar-systems-output.schema.json`.
+
+The JSON block must contain:
+- `similar_systems[]`: Array with id (SYS-001...), name, category, relevance, strengths, weaknesses
+- `patterns_extracted[]`: Patterns with source systems and applicability (adopt/adapt/avoid)
+- `differentiation`: Unique value proposition and competitive gaps
+- `analysis_metadata`: Agent ID, timestamp, confidence level
+
+This structured output enables the Synthesis Agent (Layer 2) to consume validated data instead of parsing markdown heuristically.
+
 ## Analysis Guidelines
 
 ### DO:

@@ -22,16 +22,21 @@
       },
       {
         "agent_id": "tech-lead",
-        "perspective": "Architecture & Design Patterns",
+        "perspective": "Architecture, Design Patterns & Refactoring",
         "subagent_type": "tech-lead",
         "focus_areas": [
           "Three-layer architecture adherence",
           "SOLID principles",
           "Dependency injection patterns",
           "Coupling and cohesion",
-          "Technical debt implications"
+          "Technical debt implications",
+          "Code duplication and abstraction opportunities",
+          "Interface simplification",
+          "Dead code elimination",
+          "Naming improvements"
         ],
-        "prompt_template": "Analyze this goal for architectural implications. Identify pattern violations, refactoring opportunities, and design improvements."
+        "scope_boundary": "Architecture decisions, design patterns, code structure, and refactoring. Does NOT cover persona-specific UX impacts (that's oracle-enduser) or interaction design patterns (that's codex-ux).",
+        "prompt_template": "Analyze this goal for architectural implications. Identify pattern violations, refactoring opportunities, abstraction chances, code duplication, and design improvements."
       },
       {
         "agent_id": "test-lead",
@@ -61,7 +66,7 @@
       },
       {
         "agent_id": "oracle-enduser",
-        "perspective": "End-User Experience Lens",
+        "perspective": "End-User Experience Lens (Persona Journey Impact)",
         "subagent_type": "oracle",
         "focus_areas": [
           "User journey impact",
@@ -70,6 +75,7 @@
           "Cognitive load",
           "Error recovery UX"
         ],
+        "scope_boundary": "Persona-specific journey impacts: how changes affect specific users' workflows, emotional states, and accessibility needs. Does NOT cover interaction design patterns, UI component design, or visual design (that's codex-ux).",
         "prompt_template": "Analyze this goal from end-user perspective. Consider Brenda (elderly patient), David (caregiver), Dr. Evans (provider). What UX concerns exist?"
       },
       {
@@ -113,16 +119,13 @@
       },
       {
         "agent_id": "refactor-opportunity",
-        "perspective": "Refactoring Opportunities",
+        "perspective": "DEPRECATED - Merged into tech-lead",
         "subagent_type": "oracle",
-        "focus_areas": [
-          "Code duplication",
-          "Abstraction opportunities",
-          "Interface simplification",
-          "Dead code elimination",
-          "Naming improvements"
-        ],
-        "prompt_template": "Analyze this goal for refactoring opportunities. Identify duplications, abstraction chances, and code quality improvements beyond the immediate fix."
+        "deprecated": true,
+        "merged_into": "tech-lead",
+        "deprecation_note": "v2.8.0: Refactoring focus areas merged into tech-lead to eliminate contradictory recommendations from overlapping scopes. Both analyzed code duplication, abstraction, and design patterns.",
+        "focus_areas": [],
+        "prompt_template": "DEPRECATED: Use tech-lead instead."
       }
     ],
 
@@ -143,7 +146,7 @@
       },
       {
         "agent_id": "codex-ux",
-        "perspective": "UX Design Excellence",
+        "perspective": "UX Design Excellence (Interaction Design Patterns)",
         "codex_expert": "Scope Analyst",
         "mode": "Advisory",
         "focus_areas": [
@@ -153,6 +156,7 @@
           "Interaction patterns",
           "Error state design"
         ],
+        "scope_boundary": "Interaction design patterns, UI component design, design system consistency, and error state visual design. Does NOT cover persona-specific journey impacts or emotional analysis (that's oracle-enduser).",
         "delegation_template": "${CLAUDE_PLUGIN_ROOT}/templates/codex-ux-discovery.md"
       },
       {
@@ -252,6 +256,22 @@
       "minimum_agents_required": 3,
       "all_metrics_must_pass": true
     }
+  },
+
+  "file_to_perspective_mapping": {
+    "description": "Maps file path patterns to agent perspectives for incremental discovery (--incremental flag)",
+    "mappings": [
+      { "pattern": "security|auth|encryption|token|session|credential", "perspectives": ["security-privacy", "codex-security"] },
+      { "pattern": "test|spec|__tests__|__mocks__", "perspectives": ["test-lead"] },
+      { "pattern": "mobile|ios|android|native", "perspectives": ["mobile-lead"] },
+      { "pattern": "sync|offline|queue|replication", "perspectives": ["operations-maintenance", "mobile-lead", "crash-resilience"] },
+      { "pattern": "perf|cache|memory|optimize", "perspectives": ["performance-analyst"] },
+      { "pattern": "ui|component|screen|view|layout", "perspectives": ["oracle-enduser", "codex-ux"] },
+      { "pattern": "api|endpoint|route|controller", "perspectives": ["codex-architect", "security-privacy"] },
+      { "pattern": "config|deploy|docker|ci|cd", "perspectives": ["operations-maintenance"] }
+    ],
+    "default_perspective": "tech-lead",
+    "notes": "Patterns are matched against file paths using case-insensitive regex. If no pattern matches, the tech-lead perspective is always included as default."
   },
 
   "metric_templates": {

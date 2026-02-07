@@ -5,9 +5,29 @@ Run a quick design/architecture review on staged changes before committing. This
 ## Trigger
 
 User invokes `/acis pre-commit-review` with optional flags:
-- `--strict` - BLOCK verdict prevents commit (exit code 1)
+- `--advisory` - BLOCK verdict is informational only (exit code 0). Overrides the default strict mode.
 - `--skip-codex` - Use internal heuristics only (faster, less thorough)
 - `--quiet` - Only show output if WARN or BLOCK
+
+**Default Mode: STRICT** (changed in v2.8.0)
+
+The pre-commit review now defaults to **strict mode** where BLOCK verdicts prevent the commit (exit code 1). This can be configured per-project in `.acis-config.json`:
+
+```json
+{
+  "preCommitReview": {
+    "defaultMode": "strict",
+    "blockOnSeverity": "any"
+  }
+}
+```
+
+| Setting | Values | Default | Description |
+|---------|--------|---------|-------------|
+| `defaultMode` | `strict` / `advisory` | `strict` | Whether BLOCK verdict prevents commit |
+| `blockOnSeverity` | `any` / `important` / `blocking` | `any` | Minimum issue severity that triggers a block |
+
+Use `--advisory` flag to override strict mode for a single run. Use `preCommitReview.defaultMode: "advisory"` in config to change the project default.
 
 ## Workflow
 
@@ -60,7 +80,8 @@ User invokes `/acis pre-commit-review` with optional flags:
                                   ┌─────────────────────┐
                                   │ Exit code:          │
                                   │ 0: PASS or WARN     │
-                                  │ 1: BLOCK (--strict) │
+                                  │ 1: BLOCK (default)  │
+                                  │ 0: BLOCK (advisory) │
                                   └─────────────────────┘
 ```
 
@@ -212,7 +233,7 @@ mcp__codex__codex({
 
 ## Exit Codes
 
-| Verdict | Normal Mode | --strict Mode |
+| Verdict | --advisory Mode | Default (strict) Mode |
 |---------|-------------|---------------|
 | PASS | 0 | 0 |
 | WARN | 0 | 0 |
@@ -239,6 +260,6 @@ mcp__codex__codex({
 
 | Flag | Effect |
 |------|--------|
-| `--strict` | Exit code 1 on BLOCK (default: 0) |
+| `--advisory` | Exit code 0 on BLOCK (overrides default strict mode) |
 | `--skip-codex` | Use heuristics only |
 | `--quiet` | Only show output if WARN or BLOCK |

@@ -1,0 +1,199 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "implementation-spec.schema.json",
+  "title": "ACIS Implementation Spec",
+  "description": "Schema for per-subsystem implementation specifications generated from GENESIS output",
+  "type": "object",
+  "required": ["spec_id", "subsystem_name", "description", "boundary", "verification", "acceptance_criteria"],
+  "properties": {
+    "spec_id": {
+      "type": "string",
+      "pattern": "^SPEC-[a-zA-Z0-9-]+$",
+      "description": "Unique specification identifier (e.g., SPEC-auth-service)"
+    },
+    "subsystem_name": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Human-readable subsystem name"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Detailed description of what this subsystem does"
+    },
+    "source": {
+      "type": "object",
+      "description": "References to GENESIS source documents",
+      "properties": {
+        "genesis_dir": {
+          "type": "string",
+          "description": "Path to GENESIS output directory (e.g., docs/genesis/)"
+        },
+        "subsystem_ref": {
+          "type": "string",
+          "description": "Reference to section in SUBSYSTEMS_DRAFT.md"
+        },
+        "adr_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Related ADR identifiers (e.g., ADR-001)"
+        },
+        "architecture_ref": {
+          "type": "string",
+          "description": "Reference to section in ARCHITECTURE_DRAFT.md"
+        },
+        "journey_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Related journey identifiers from JOURNEYS_DRAFT.md"
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": ["directories_to_create", "files_to_create"],
+      "description": "Subsystem boundary definition",
+      "properties": {
+        "directories_to_create": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Directories to create for this subsystem"
+        },
+        "files_to_create": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Files to create for this subsystem"
+        },
+        "exports": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Public API surface (exported functions, classes, types)"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other spec IDs this subsystem depends on"
+        },
+        "communication_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "Target subsystem spec ID"
+              },
+              "pattern": {
+                "type": "string",
+                "enum": ["direct-import", "event-driven", "message-bus", "api-call", "shared-state"],
+                "description": "Communication pattern"
+              },
+              "interface": {
+                "type": "string",
+                "description": "Interface contract description"
+              }
+            }
+          },
+          "description": "How this subsystem communicates with others"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["build_command"],
+      "description": "Commands to verify successful implementation",
+      "properties": {
+        "build_command": {
+          "type": "string",
+          "description": "Command to verify the subsystem builds (e.g., pnpm build)"
+        },
+        "test_command": {
+          "type": "string",
+          "description": "Command to run subsystem tests (e.g., pnpm test --filter subsystem-name)"
+        },
+        "lint_command": {
+          "type": "string",
+          "description": "Command to lint the subsystem (e.g., pnpm lint --filter subsystem-name)"
+        },
+        "api_surface_check": {
+          "type": "string",
+          "description": "Command to verify public API exists (e.g., grep -r 'export' src/subsystem/ | wc -l)"
+        },
+        "type_check_command": {
+          "type": "string",
+          "description": "Command to type-check (e.g., tsc --noEmit)"
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["criterion", "verification"],
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "description": "Acceptance criterion description (from JOURNEYS_DRAFT.md or ADRs)"
+          },
+          "verification": {
+            "type": "string",
+            "description": "How to verify this criterion (test command or manual check)"
+          },
+          "source": {
+            "type": "string",
+            "description": "Where this criterion came from (e.g., JOURNEYS_DRAFT.md, ADR-003)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "passed", "failed"],
+            "default": "pending"
+          }
+        }
+      },
+      "description": "Acceptance criteria derived from GENESIS documents"
+    },
+    "complexity_tier": {
+      "type": "string",
+      "enum": ["1", "2", "3"],
+      "description": "Complexity tier: 1=simple, 2=moderate, 3=complex"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "implementing", "complete", "blocked", "deferred"],
+      "default": "pending",
+      "description": "Current implementation status"
+    },
+    "implementation_notes": {
+      "type": "string",
+      "description": "Additional notes or constraints for implementation"
+    },
+    "adr_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "adr_id": {
+            "type": "string",
+            "description": "ADR identifier"
+          },
+          "constraint": {
+            "type": "string",
+            "description": "Constraint from the ADR that must be respected"
+          }
+        }
+      },
+      "description": "Constraints extracted from ADRs that bound this implementation"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
