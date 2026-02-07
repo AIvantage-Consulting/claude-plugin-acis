@@ -205,6 +205,18 @@ To validate these personas with real users:
 3. {Question to ask real users}
 ```
 
+## Structured JSON Output (MANDATORY)
+
+In addition to the markdown output above, you MUST include a ` ```json ``` ` block conforming to `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-persona-output.schema.json`.
+
+The JSON block must contain:
+- `personas[]`: Array of persona objects with id (P1, P2...), name, role, type, demographics, key_need, frustration, tech_comfort, accessibility_needs
+- `anti_personas[]`: Array of anti-persona objects with name and reason
+- `needs_hierarchy[]`: Prioritized needs across all personas with must-have/should-have/nice-to-have
+- `analysis_metadata`: Agent ID, timestamp, confidence level
+
+This structured output enables the Synthesis Agent (Layer 2) to consume validated data instead of parsing markdown heuristically.
+
 ## Analysis Guidelines
 
 ### DO:

@@ -43,7 +43,8 @@
       "properties": {
         "primary_command": {
           "type": "string",
-          "description": "Main detection command"
+          "description": "Main detection command (must be a meaningful shell command)",
+          "minLength": 5
         },
         "pattern": { "type": "string" },
         "search_paths": {
@@ -63,15 +64,19 @@
             "properties": {
               "metric_id": {
                 "type": "string",
-                "description": "Unique metric identifier"
+                "description": "Unique metric identifier (snake_case, minimum 3 chars)",
+                "minLength": 3,
+                "pattern": "^[a-z][a-z0-9_]*$"
               },
               "name": {
                 "type": "string",
-                "description": "Human-readable metric name"
+                "description": "Human-readable metric name",
+                "minLength": 3
               },
               "command": {
                 "type": "string",
-                "description": "Shell command that outputs a single value"
+                "description": "Shell command that outputs a single value",
+                "minLength": 5
               },
               "parse_type": {
                 "type": "string",
@@ -95,7 +100,8 @@
               "tolerance": {
                 "type": "number",
                 "default": 0,
-                "description": "Allowed deviation from expected_value"
+                "minimum": 0,
+                "description": "Allowed deviation from expected_value (must be non-negative)"
               },
               "verification_notes": {
                 "type": "string",
@@ -343,11 +349,11 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "achieved", "blocked", "deferred", "verified_acceptable"]
+          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "quality_gate", "achieved", "blocked", "deferred", "verified_acceptable"]
         },
         "current_phase": {
           "type": "string",
-          "enum": ["discovery", "behavioral", "ralph", "consensus", "complete"]
+          "enum": ["init", "discovery", "behavioral", "ralph", "consensus", "quality_gate", "intent_verification", "complete"]
         },
         "iterations": { "type": "integer" },
         "metrics_history": {
@@ -445,6 +451,82 @@
               "still_valid": { "type": "boolean" },
               "detection_output": { "type": "string" },
               "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "intent_contract": {
+      "type": "object",
+      "description": "Records user intent and verification criteria for intent alignment",
+      "properties": {
+        "user_statement": {
+          "type": "string",
+          "description": "User's verbatim statement of what they want",
+          "minLength": 10
+        },
+        "system_interpretation": {
+          "type": "string",
+          "description": "System's interpretation of the user's intent",
+          "minLength": 10
+        },
+        "user_confirmed": {
+          "type": "boolean",
+          "description": "Whether the user confirmed the interpretation"
+        },
+        "success_criteria": {
+          "type": "array",
+          "description": "Verification commands that prove delivery",
+          "items": {
+            "type": "object",
+            "required": ["criterion_id", "description", "verification_command", "expected_result"],
+            "properties": {
+              "criterion_id": { "type": "string" },
+              "description": { "type": "string" },
+              "verification_command": { "type": "string" },
+              "expected_result": { "type": "string" },
+              "comparison": {
+                "type": "string",
+                "enum": ["eq", "contains", "not_contains", "gte", "lte", "gt", "lt"]
+              }
+            }
+          }
+        },
+        "captured_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "description": "Hash chain for end-to-end integrity verification",
+      "properties": {
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase", "hash", "timestamp"],
+            "properties": {
+              "phase": { "type": "string" },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "SHA-256 hash of goal file at this phase"
+              },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "tamper_warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "detected_at": { "type": "string", "format": "date-time" },
+              "expected_hash": { "type": "string" },
+              "actual_hash": { "type": "string" },
+              "user_action": {
+                "type": "string",
+                "enum": ["continued", "aborted"]
+              }
             }
           }
         }

@@ -1,0 +1,1011 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "description": "Implementation preferences interview for /acis:implement-parallel. Two-part interview: WHAT to build (scope, priorities, MVP boundaries, feature flags) and HOW to build (coding style, error handling, observability, design principles, build configuration).",
+  "interviewPrinciples": {
+    "defaultFirst": "Every question has a sensible default marked (Recommended). Users can accept defaults rapidly or customize.",
+    "autoDetect": "Before asking, attempt to detect preferences from existing codebase files (tsconfig.json, .eslintrc, package.json, existing source). Pre-fill defaults from detection.",
+    "skipIfKnown": "If .acis-config.json already contains implementationPreferences, load them and ask only: 'Use saved preferences? [Yes / Modify / Start fresh]'"
+  },
+  "autoDetection": {
+    "description": "Run these checks BEFORE the interview to pre-fill defaults. All commands are Bash 3.2 compatible.",
+    "checks": [
+      {
+        "field": "platform.language",
+        "command": "[ -f tsconfig.json ] && echo 'typescript' || ([ -f jsconfig.json ] && echo 'javascript' || echo 'unknown')",
+        "fallback": "typescript"
+      },
+      {
+        "field": "platform.packageManager",
+        "command": "[ -f pnpm-lock.yaml ] && echo 'pnpm' || ([ -f yarn.lock ] && echo 'yarn' || ([ -f package-lock.json ] && echo 'npm' || echo 'unknown'))",
+        "fallback": "npm"
+      },
+      {
+        "field": "platform.testFramework",
+        "command": "grep -l 'vitest\\|jest\\|mocha' package.json 2>/dev/null | head -1 && (grep -q 'vitest' package.json && echo 'vitest' || (grep -q 'jest' package.json && echo 'jest' || echo 'unknown'))",
+        "fallback": "vitest"
+      },
+      {
+        "field": "codingStyle.semicolons",
+        "command": "[ -f .eslintrc.json ] && grep -q 'semi.*always' .eslintrc.json 2>/dev/null && echo 'always' || echo 'detect'",
+        "fallback": "as-needed"
+      },
+      {
+        "field": "codingStyle.quoteStyle",
+        "command": "[ -f .prettierrc ] && grep -q 'singleQuote.*true' .prettierrc 2>/dev/null && echo 'single' || echo 'detect'",
+        "fallback": "single"
+      },
+      {
+        "field": "platform.monorepo",
+        "command": "[ -f pnpm-workspace.yaml ] || [ -f lerna.json ] || grep -q 'workspaces' package.json 2>/dev/null && echo 'true' || echo 'false'",
+        "fallback": "false"
+      }
+    ]
+  },
+  "phases": [
+    {
+      "id": 1,
+      "name": "What to Build — Scope & Priorities",
+      "description": "Define WHAT gets built: which subsystems, MVP scope, prioritization, and feature boundaries",
+      "targetDuration": "2-3 minutes",
+      "questions": [
+        {
+          "id": "IP-W1",
+          "question": "GENESIS extracted multiple subsystems. Which ones are essential for the first working version (MVP)?",
+          "header": "MVP scope",
+          "type": "multi",
+          "required": true,
+          "topics": ["scope"],
+          "default": "all-subsystems",
+          "dynamicOptions": true,
+          "dynamicSource": "Populated from GENESIS SUBSYSTEMS_DRAFT.md — each extracted subsystem becomes an option",
+          "options": [
+            {
+              "label": "All subsystems (Recommended)",
+              "value": "all-subsystems",
+              "description": "Implement everything GENESIS specified. Best when the architecture is minimal and all parts are needed.",
+              "pros": ["Complete system from day one", "No integration gaps", "Architecture coherent"],
+              "cons": ["Longer to complete", "All-or-nothing risk", "May include non-essential parts"]
+            },
+            {
+              "label": "Core subsystems only",
+              "value": "core-only",
+              "description": "Build only subsystems on the critical path. Defer supporting/nice-to-have subsystems.",
+              "pros": ["Faster to first working version", "Focus on value", "Can validate architecture early"],
+              "cons": ["Missing subsystems need stubs/mocks", "Deferred work accumulates", "Integration risk later"]
+            },
+            {
+              "label": "Let me pick specific ones",
+              "value": "manual-select",
+              "description": "I'll select exactly which subsystems to include in this batch.",
+              "pros": ["Full control", "Can match team capacity", "Deliberate scoping"],
+              "cons": ["May miss dependencies", "Requires understanding of dependency graph"]
+            }
+          ],
+          "followUps": [
+            "Which subsystems are must-have vs nice-to-have?",
+            "Are there subsystems that should be stubbed out (interface only, no implementation)?"
+          ]
+        },
+        {
+          "id": "IP-W2",
+          "question": "How should subsystems be prioritized for implementation order?",
+          "header": "Priority",
+          "type": "single",
+          "required": true,
+          "topics": ["scope"],
+          "default": "dependency-order",
+          "options": [
+            {
+              "label": "Dependency order (Recommended)",
+              "value": "dependency-order",
+              "description": "Build foundation subsystems first, then dependents. Topological sort from GENESIS dependency graph.",
+              "pros": ["No stubs needed", "Each subsystem can use real dependencies", "Natural build order"],
+              "cons": ["May delay high-value subsystems", "Foundation work may feel slow initially"]
+            },
+            {
+              "label": "Value-first (highest business value first)",
+              "value": "value-first",
+              "description": "Build the most impactful subsystems first, even if they need stubs for missing dependencies.",
+              "pros": ["Early value delivery", "Stakeholder confidence", "Validate core hypothesis"],
+              "cons": ["Stub/mock overhead", "Integration risk", "May need rework when deps are real"]
+            },
+            {
+              "label": "Risk-first (hardest/riskiest first)",
+              "value": "risk-first",
+              "description": "Tackle the most technically risky or uncertain subsystems first to fail fast.",
+              "pros": ["Early risk resolution", "Architecture validated", "Hard problems solved fresh"],
+              "cons": ["Slower visible progress", "May demoralize team", "Easy wins deferred"]
+            },
+            {
+              "label": "Inside-out (data layer → business logic → UI)",
+              "value": "inside-out",
+              "description": "Build from the data layer outward: storage → services → API → UI.",
+              "pros": ["Solid foundation", "Each layer tested before next", "Natural data flow"],
+              "cons": ["UI/UX feedback delayed", "Long time before anything visible"]
+            }
+          ],
+          "followUps": [
+            "Are there any subsystems that MUST be implemented before a specific deadline or milestone?"
+          ]
+        },
+        {
+          "id": "IP-W3",
+          "question": "Should subsystems that aren't being implemented now get stub/interface files?",
+          "header": "Stubs",
+          "type": "single",
+          "required": true,
+          "topics": ["scope"],
+          "default": "interface-stubs",
+          "options": [
+            {
+              "label": "Interface stubs (Recommended)",
+              "value": "interface-stubs",
+              "description": "Create type definitions and interface files for deferred subsystems. No implementation, but the API contract exists.",
+              "pros": ["Dependent subsystems can code against interfaces", "Clear API contract", "Easy to implement later"],
+              "cons": ["Stubs may drift from reality", "Maintenance overhead for unused code"]
+            },
+            {
+              "label": "Mock implementations",
+              "value": "mock-implementations",
+              "description": "Create mock/fake implementations that return static data. Enough to test dependent subsystems end-to-end.",
+              "pros": ["Full end-to-end testing possible", "Realistic integration testing", "Good developer experience"],
+              "cons": ["More code to write now", "Mocks can hide real issues", "Need maintenance"]
+            },
+            {
+              "label": "No stubs (skip deferred)",
+              "value": "no-stubs",
+              "description": "Don't create anything for deferred subsystems. Dependent code will need to handle missing dependencies at build time.",
+              "pros": ["No wasted effort", "No false confidence", "Clean codebase"],
+              "cons": ["Dependent subsystems can't compile/test", "Integration harder later"]
+            }
+          ]
+        },
+        {
+          "id": "IP-W4",
+          "question": "Should the implementation include feature flags for incomplete or experimental subsystems?",
+          "header": "Feature flags",
+          "type": "single",
+          "required": false,
+          "topics": ["scope"],
+          "default": "environment-flags",
+          "options": [
+            {
+              "label": "Environment variable flags (Recommended)",
+              "value": "environment-flags",
+              "description": "Simple ENABLE_SUBSYSTEM_X=true env vars. Each subsystem checks its flag at startup.",
+              "pros": ["Simple to implement", "No external dependencies", "Works in any environment", "Easy to toggle"],
+              "cons": ["No gradual rollout", "Restart required to change", "No user-level targeting"]
+            },
+            {
+              "label": "Configuration file flags",
+              "value": "config-flags",
+              "description": "Feature flags in a JSON/YAML config file. Hot-reloadable without restart.",
+              "pros": ["Hot-reloadable", "Version controlled", "Groupable", "No restart needed"],
+              "cons": ["Config file management", "Need file watcher", "Slightly more complex"]
+            },
+            {
+              "label": "No feature flags",
+              "value": "no-flags",
+              "description": "All implemented subsystems are always active. No toggles.",
+              "pros": ["Simplest code", "No dead code paths", "Clear state"],
+              "cons": ["All-or-nothing deploys", "Can't disable broken subsystem without redeploy"]
+            },
+            {
+              "label": "Feature flag service (LaunchDarkly, etc.)",
+              "value": "flag-service",
+              "description": "External feature flag service for runtime toggling, gradual rollout, and A/B testing.",
+              "pros": ["Gradual rollout", "User targeting", "A/B testing", "Runtime control"],
+              "cons": ["External dependency", "Cost", "Complexity", "Network dependency"]
+            }
+          ]
+        },
+        {
+          "id": "IP-W5",
+          "question": "What deliverable format should each subsystem produce?",
+          "header": "Deliverables",
+          "type": "multi",
+          "required": true,
+          "topics": ["scope"],
+          "default": "code-tests-types",
+          "options": [
+            {
+              "label": "Code + Tests + Types (Recommended)",
+              "value": "code-tests-types",
+              "description": "Implementation code, test files, and TypeScript type definitions. The essential trio.",
+              "pros": ["Everything needed to ship", "Types document the API", "Tests verify correctness"],
+              "cons": ["More to generate per subsystem"]
+            },
+            {
+              "label": "Include API documentation",
+              "value": "include-api-docs",
+              "description": "Also generate JSDoc/TSDoc comments and a README per subsystem.",
+              "pros": ["Self-documenting", "Easier onboarding", "API reference available immediately"],
+              "cons": ["More content to maintain", "Docs can drift"]
+            },
+            {
+              "label": "Include OpenAPI/schema definitions",
+              "value": "include-schemas",
+              "description": "Also generate OpenAPI specs or JSON schemas for subsystem APIs.",
+              "pros": ["Machine-readable API contract", "Can generate client SDKs", "API-first design"],
+              "cons": ["Additional files", "Schema maintenance", "May be premature"]
+            },
+            {
+              "label": "Include example/seed data",
+              "value": "include-seed-data",
+              "description": "Also generate fixture/seed data files for development and testing.",
+              "pros": ["Immediate dev experience", "Consistent test data", "Demo-ready"],
+              "cons": ["Synthetic data may mislead", "Maintenance burden"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "How to Build — Coding Style & Conventions",
+      "description": "How code should look and be organized",
+      "targetDuration": "1-2 minutes",
+      "questions": [
+        {
+          "id": "IP-Q1",
+          "question": "What naming convention should we follow for files and directories?",
+          "header": "File naming",
+          "type": "single",
+          "required": true,
+          "topics": ["codingStyle"],
+          "default": "kebab-case",
+          "options": [
+            {
+              "label": "kebab-case (Recommended)",
+              "value": "kebab-case",
+              "description": "auth-service.ts, user-repository.ts — Most common in Node/TS ecosystems. Works across all OS file systems.",
+              "pros": ["Universal OS compatibility", "Matches npm package naming", "Most common in modern JS/TS"],
+              "cons": ["Longer to type than camelCase"]
+            },
+            {
+              "label": "camelCase",
+              "value": "camelCase",
+              "description": "authService.ts, userRepository.ts — Matches JavaScript variable naming conventions.",
+              "pros": ["Matches JS variable names", "No separator characters"],
+              "cons": ["Case-sensitive file systems can cause issues", "Less readable for long names"]
+            },
+            {
+              "label": "PascalCase",
+              "value": "PascalCase",
+              "description": "AuthService.ts, UserRepository.ts — Common in React component files and C#-style projects.",
+              "pros": ["Clear class/component association", "Standard for React components"],
+              "cons": ["Case-sensitive issues on macOS/Windows", "Mixes with type names"]
+            },
+            {
+              "label": "snake_case",
+              "value": "snake_case",
+              "description": "auth_service.ts, user_repository.ts — Common in Python, Ruby, Rust ecosystems.",
+              "pros": ["Very readable", "Standard in many non-JS ecosystems"],
+              "cons": ["Non-standard for JS/TS", "Feels foreign in Node projects"]
+            }
+          ],
+          "followUps": [
+            "Should React/UI components use a different convention (e.g., PascalCase for components)?"
+          ]
+        },
+        {
+          "id": "IP-Q2",
+          "question": "What code organization pattern should subsystems follow internally?",
+          "header": "Code org",
+          "type": "single",
+          "required": true,
+          "topics": ["codingStyle"],
+          "default": "feature-based",
+          "options": [
+            {
+              "label": "Feature-based / Vertical slices (Recommended)",
+              "value": "feature-based",
+              "description": "Group by feature: auth/ has its own types, services, tests, routes. Each subsystem is self-contained.",
+              "pros": ["High cohesion", "Easy to navigate per-feature", "Scales well", "Easy to extract to packages"],
+              "cons": ["Shared utilities need a home", "Can lead to duplication if not careful"]
+            },
+            {
+              "label": "Layer-based / Horizontal",
+              "value": "layer-based",
+              "description": "Group by type: types/, services/, controllers/, tests/. Traditional MVC-style separation.",
+              "pros": ["Clear separation of concerns", "Easy to enforce architecture rules", "Familiar pattern"],
+              "cons": ["Related code scattered across folders", "Harder to see feature boundaries"]
+            },
+            {
+              "label": "Hybrid (Feature + shared layers)",
+              "value": "hybrid",
+              "description": "Features are vertical slices, but shared concerns (db, config, middleware) live in a common/ or shared/ layer.",
+              "pros": ["Best of both", "Clear shared vs feature-specific boundary"],
+              "cons": ["More rules to follow", "shared/ can become a dumping ground"]
+            }
+          ],
+          "followUps": [
+            "Should each subsystem have a barrel file (index.ts) exporting its public API?"
+          ]
+        },
+        {
+          "id": "IP-Q3",
+          "question": "What import style should we use?",
+          "header": "Imports",
+          "type": "single",
+          "required": false,
+          "topics": ["codingStyle"],
+          "default": "path-aliases",
+          "options": [
+            {
+              "label": "Path aliases (@/subsystem) (Recommended)",
+              "value": "path-aliases",
+              "description": "import { Auth } from '@/auth-service' — Clean, refactor-safe imports via tsconfig paths.",
+              "pros": ["Clean imports", "Refactor-safe", "No '../../../' chains"],
+              "cons": ["Requires tsconfig paths setup", "Some tools need extra config"]
+            },
+            {
+              "label": "Relative paths",
+              "value": "relative",
+              "description": "import { Auth } from '../../auth-service' — No configuration needed, works everywhere.",
+              "pros": ["Zero config", "Works with any tool", "Explicit dependency chain"],
+              "cons": ["Deep nesting gets ugly", "Fragile during refactors"]
+            },
+            {
+              "label": "Package imports (monorepo)",
+              "value": "package-imports",
+              "description": "import { Auth } from '@myapp/auth-service' — Each subsystem is a workspace package.",
+              "pros": ["True module boundaries", "Independent versioning possible", "Enforced API surface"],
+              "cons": ["More build config", "Heavier setup", "Requires workspace tooling"]
+            }
+          ]
+        },
+        {
+          "id": "IP-Q4",
+          "question": "What export style should subsystem public APIs use?",
+          "header": "Exports",
+          "type": "single",
+          "required": false,
+          "topics": ["codingStyle"],
+          "default": "named-exports",
+          "options": [
+            {
+              "label": "Named exports only (Recommended)",
+              "value": "named-exports",
+              "description": "export function createUser() {} — Tree-shakeable, explicit, autocomplete-friendly.",
+              "pros": ["Tree-shakeable", "Better autocomplete", "Explicit API surface", "Avoids naming conflicts"],
+              "cons": ["More verbose imports"]
+            },
+            {
+              "label": "Default + named exports",
+              "value": "mixed-exports",
+              "description": "export default class AuthService {} + named helpers — Default for main class, named for utilities.",
+              "pros": ["Clear primary export", "Flexible usage"],
+              "cons": ["Inconsistent naming on import side", "Not tree-shakeable for default"]
+            },
+            {
+              "label": "Barrel re-exports",
+              "value": "barrel-exports",
+              "description": "index.ts re-exports from internal modules — One import path per subsystem.",
+              "pros": ["Clean consumer API", "Internal structure hidden"],
+              "cons": ["Can cause circular dependencies", "Larger bundle if not tree-shaken"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "How to Build — Error Handling & Logging",
+      "description": "How errors are caught, reported, and traced",
+      "targetDuration": "1-2 minutes",
+      "questions": [
+        {
+          "id": "IP-Q5",
+          "question": "What error handling strategy should subsystems use?",
+          "header": "Errors",
+          "type": "single",
+          "required": true,
+          "topics": ["errorHandling"],
+          "default": "typed-errors",
+          "options": [
+            {
+              "label": "Typed error classes (Recommended)",
+              "value": "typed-errors",
+              "description": "Custom error classes per domain: AuthError, ValidationError, NotFoundError. Each with error code, HTTP status, and safe message.",
+              "pros": ["Type-safe error handling", "Structured error responses", "Easy to map to HTTP/gRPC codes", "Instanceof checks work"],
+              "cons": ["More boilerplate upfront", "Error class hierarchy can grow"]
+            },
+            {
+              "label": "Result type (Either/Result pattern)",
+              "value": "result-type",
+              "description": "Functions return Result<T, E> instead of throwing. Forces callers to handle errors explicitly.",
+              "pros": ["No hidden control flow", "Compiler-enforced error handling", "Functional style", "Composable"],
+              "cons": ["Unusual in JS/TS ecosystem", "Verbose for simple cases", "Doesn't work with async/await natively"]
+            },
+            {
+              "label": "Standard Error + error codes",
+              "value": "error-codes",
+              "description": "Throw standard Error with a code property: throw Object.assign(new Error('msg'), { code: 'AUTH_FAILED' })",
+              "pros": ["Simple", "No custom classes needed", "Works with any error handler"],
+              "cons": ["No type safety on error shapes", "Easy to forget error codes", "No hierarchy"]
+            },
+            {
+              "label": "Mixed (throw at boundaries, Result internally)",
+              "value": "mixed",
+              "description": "Use Result<T,E> within subsystem logic, throw typed errors at API/handler boundaries.",
+              "pros": ["Best of both worlds", "Clean internal logic", "Standard boundary behavior"],
+              "cons": ["Two patterns to learn", "Conversion layer needed"]
+            }
+          ],
+          "followUps": [
+            "Should there be a global error handler that catches unhandled errors?"
+          ]
+        },
+        {
+          "id": "IP-Q6",
+          "question": "What logging approach should subsystems use?",
+          "header": "Logging",
+          "type": "single",
+          "required": true,
+          "topics": ["logging"],
+          "default": "structured-logger",
+          "options": [
+            {
+              "label": "Structured logger (pino/winston) (Recommended)",
+              "value": "structured-logger",
+              "description": "JSON-structured logs with levels, context, and correlation IDs. logger.info({ userId, action }, 'User logged in')",
+              "pros": ["Machine-parseable", "Searchable in log aggregators", "Correlation ID support", "Level filtering"],
+              "cons": ["Hard to read in terminal without pretty-printing", "Requires logger dependency"]
+            },
+            {
+              "label": "Console wrapper with levels",
+              "value": "console-levels",
+              "description": "Thin wrapper around console.log/warn/error with log levels and optional formatting.",
+              "pros": ["Zero dependencies", "Easy to understand", "Works everywhere"],
+              "cons": ["Not structured", "Hard to filter in production", "No correlation IDs"]
+            },
+            {
+              "label": "Debug-style (debug package)",
+              "value": "debug-namespaced",
+              "description": "Namespace-based debug logging: DEBUG=app:auth,app:sync. Only outputs when namespace is enabled.",
+              "pros": ["Zero cost when disabled", "Granular namespace control", "Great for development"],
+              "cons": ["Not suitable for production logging", "No log levels", "Requires env var setup"]
+            },
+            {
+              "label": "Minimal (errors only in production)",
+              "value": "minimal",
+              "description": "Only log errors and critical events. No debug/info/warn in production. Development uses console.log freely.",
+              "pros": ["Minimal noise", "Low overhead", "Simple"],
+              "cons": ["Hard to debug production issues", "No audit trail", "Missing context when things go wrong"]
+            }
+          ],
+          "followUps": [
+            "Should each subsystem have its own logger instance with a namespace prefix?"
+          ]
+        },
+        {
+          "id": "IP-Q7",
+          "question": "What level of debug tracing should be built into subsystems?",
+          "header": "Debug traces",
+          "type": "single",
+          "required": true,
+          "topics": ["debugging"],
+          "default": "boundary-tracing",
+          "options": [
+            {
+              "label": "Boundary tracing (Recommended)",
+              "value": "boundary-tracing",
+              "description": "Trace at subsystem boundaries: entry/exit of public API methods, external service calls, and error paths. Includes timing and correlation IDs.",
+              "pros": ["Low overhead", "Covers most debugging needs", "Clear request flow", "Not noisy"],
+              "cons": ["Internal logic is opaque", "May miss intermediate state issues"]
+            },
+            {
+              "label": "Comprehensive tracing (OpenTelemetry-style)",
+              "value": "comprehensive",
+              "description": "Full span-based tracing with OpenTelemetry. Every significant operation creates a span with attributes.",
+              "pros": ["Complete visibility", "Distributed tracing ready", "Industry standard", "Amazing for debugging"],
+              "cons": ["Significant overhead", "Complex setup", "Large dependency", "Can be noisy"]
+            },
+            {
+              "label": "Error-path only",
+              "value": "error-only",
+              "description": "Only trace when errors occur. Capture stack traces, context, and breadcrumbs leading to the error.",
+              "pros": ["Near-zero overhead in happy path", "Focused on what matters", "Small log volume"],
+              "cons": ["Blind to slow operations", "No visibility into normal flow", "Hard to trace intermittent issues"]
+            },
+            {
+              "label": "Conditional (flag-gated)",
+              "value": "conditional",
+              "description": "Tracing is always coded in but gated behind feature flags or environment variables. Enable per-subsystem in production.",
+              "pros": ["Zero cost when off", "Enable per-subsystem", "Full control"],
+              "cons": ["Feature flag infrastructure needed", "Code is more complex", "Easy to forget to add traces"]
+            }
+          ],
+          "followUps": [
+            "Should debug traces include request/response payloads (with PII redaction)?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "How to Build — Design Principles",
+      "description": "How strictly to follow SOLID, DRY, and other design principles",
+      "targetDuration": "1-2 minutes",
+      "questions": [
+        {
+          "id": "IP-Q8",
+          "question": "How strictly should SOLID principles be followed?",
+          "header": "SOLID",
+          "type": "single",
+          "required": true,
+          "topics": ["designPrinciples"],
+          "default": "pragmatic-solid",
+          "options": [
+            {
+              "label": "Pragmatic SOLID (Recommended)",
+              "value": "pragmatic-solid",
+              "description": "Follow SOLID where it adds value. SRP and DIP always. ISP and OCP when interfaces have 2+ implementations. LSP when using inheritance.",
+              "pros": ["Right-sized abstraction", "Avoids over-engineering", "Interfaces when needed, not speculative"],
+              "cons": ["Judgment calls required", "Less consistent than strict approach"]
+            },
+            {
+              "label": "Strict SOLID",
+              "value": "strict-solid",
+              "description": "Every class has one responsibility. Every dependency is injected via interface. All principles enforced everywhere.",
+              "pros": ["Maximum testability", "Easy to swap implementations", "Clear boundaries", "Consistent patterns"],
+              "cons": ["More files and interfaces", "Over-abstraction for simple cases", "Slower initial development"]
+            },
+            {
+              "label": "Relaxed (SOLID-aware)",
+              "value": "relaxed-solid",
+              "description": "Be aware of SOLID but don't enforce. Extract interfaces only when testing demands it. Inline dependencies when simple.",
+              "pros": ["Fastest to write", "Less boilerplate", "Direct and readable"],
+              "cons": ["Harder to test in isolation", "Tighter coupling", "Harder to refactor later"]
+            }
+          ],
+          "followUps": [
+            "Are there specific SOLID principles you care about most? (e.g., always DIP for external services)"
+          ]
+        },
+        {
+          "id": "IP-Q9",
+          "question": "How aggressively should code be DRY (Don't Repeat Yourself)?",
+          "header": "DRY",
+          "type": "single",
+          "required": true,
+          "topics": ["designPrinciples"],
+          "default": "rule-of-three",
+          "options": [
+            {
+              "label": "Rule of Three (Recommended)",
+              "value": "rule-of-three",
+              "description": "Duplicate once is fine. On third occurrence, extract to a shared utility. Prefer duplication over premature abstraction.",
+              "pros": ["Avoids premature abstraction", "Abstractions are informed by real usage", "Simple to start"],
+              "cons": ["Some duplication exists temporarily", "Requires discipline to extract on third"]
+            },
+            {
+              "label": "Strict DRY",
+              "value": "strict-dry",
+              "description": "No duplication ever. Extract immediately on second occurrence. Every piece of knowledge has a single source.",
+              "pros": ["Single source of truth", "Changes in one place", "Consistent behavior"],
+              "cons": ["Premature abstractions", "Tight coupling through shared code", "Harder to understand indirect code"]
+            },
+            {
+              "label": "WET (Write Everything Twice)",
+              "value": "wet",
+              "description": "Tolerate duplication freely. Only extract when 3+ copies exist AND the abstraction is obvious. Prefer locality over DRY.",
+              "pros": ["Maximum locality", "No wrong abstractions", "Easy to understand each module independently"],
+              "cons": ["More code to maintain", "Inconsistencies between copies", "Bug fixes needed in multiple places"]
+            }
+          ],
+          "followUps": [
+            "Should cross-subsystem shared code live in a dedicated 'shared' or 'common' subsystem?"
+          ]
+        },
+        {
+          "id": "IP-Q10",
+          "question": "What testing strategy should be followed for new subsystems?",
+          "header": "Testing",
+          "type": "single",
+          "required": true,
+          "topics": ["testing"],
+          "default": "test-alongside",
+          "options": [
+            {
+              "label": "Test alongside implementation (Recommended)",
+              "value": "test-alongside",
+              "description": "Write tests as you implement. Each module gets a co-located test file. Focus on public API behavior, not internals.",
+              "pros": ["Tests inform design", "Catches bugs early", "Co-located tests are easy to find", "Balanced speed/quality"],
+              "cons": ["Slightly slower initial development", "May need to refactor tests with code"]
+            },
+            {
+              "label": "Test-first (strict TDD)",
+              "value": "test-first",
+              "description": "Write failing test → implement → refactor. Red-Green-Refactor cycle for every public function.",
+              "pros": ["Tests drive design", "Near-100% coverage", "Confidence in every change", "Better API design"],
+              "cons": ["Slower for exploratory work", "Overhead for simple functions", "Requires TDD discipline"]
+            },
+            {
+              "label": "Integration tests first",
+              "value": "integration-first",
+              "description": "Start with integration/API tests that test the subsystem as a whole. Add unit tests only for complex internal logic.",
+              "pros": ["Tests real behavior", "Fewer tests to maintain", "Refactor-resistant", "Higher confidence per test"],
+              "cons": ["Slower to run", "Harder to pinpoint failures", "Setup complexity"]
+            },
+            {
+              "label": "Minimal (critical paths only)",
+              "value": "minimal-tests",
+              "description": "Test only critical business logic and error paths. No tests for trivial code, configuration, or simple CRUD.",
+              "pros": ["Fast development", "Tests where they matter", "Low maintenance"],
+              "cons": ["Coverage gaps", "Regressions in untested code", "Less confidence in refactoring"]
+            }
+          ],
+          "followUps": [
+            "Should tests use real dependencies or mocks for external services?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "How to Build — Platform & Build Configuration",
+      "description": "Runtime, tooling, and build pipeline preferences",
+      "targetDuration": "1-2 minutes",
+      "questions": [
+        {
+          "id": "IP-Q11",
+          "question": "What is the target runtime and language?",
+          "header": "Runtime",
+          "type": "single",
+          "required": true,
+          "topics": ["platform"],
+          "default": "auto-detect",
+          "autoDetectField": "platform.language",
+          "options": [
+            {
+              "label": "TypeScript (strict) (Recommended)",
+              "value": "typescript-strict",
+              "description": "TypeScript with strict mode enabled. noImplicitAny, strictNullChecks, noUncheckedIndexedAccess.",
+              "pros": ["Maximum type safety", "Catches more bugs at compile time", "Better IDE support"],
+              "cons": ["More type annotations needed", "Some library types are incomplete"]
+            },
+            {
+              "label": "TypeScript (standard)",
+              "value": "typescript-standard",
+              "description": "TypeScript with default strictness. strict: true but without additional strict flags.",
+              "pros": ["Good type safety", "Less friction than strict mode", "Industry standard"],
+              "cons": ["Some type holes possible", "Less safe than strict"]
+            },
+            {
+              "label": "JavaScript (with JSDoc types)",
+              "value": "javascript-jsdoc",
+              "description": "Plain JavaScript with JSDoc type annotations for IDE support. No compilation step.",
+              "pros": ["No build step for types", "Easy to adopt", "Works with checkJs"],
+              "cons": ["Less enforcement", "Verbose type syntax", "Easy to skip types"]
+            },
+            {
+              "label": "JavaScript (untyped)",
+              "value": "javascript",
+              "description": "Plain JavaScript without type annotations. Fastest to write, least safe.",
+              "pros": ["Maximum speed", "No tooling needed", "Simple"],
+              "cons": ["No type safety", "Runtime errors", "Harder to maintain at scale"]
+            }
+          ]
+        },
+        {
+          "id": "IP-Q12",
+          "question": "What package manager and build tool should be used?",
+          "header": "Build tools",
+          "type": "single",
+          "required": true,
+          "topics": ["platform"],
+          "default": "auto-detect",
+          "autoDetectField": "platform.packageManager",
+          "options": [
+            {
+              "label": "pnpm (Recommended for monorepos)",
+              "value": "pnpm",
+              "description": "Fast, disk-efficient package manager with first-class workspace support.",
+              "pros": ["Fastest installs", "Strict dependency resolution", "Excellent monorepo support", "Disk efficient"],
+              "cons": ["Less widespread than npm", "Some tools assume npm"]
+            },
+            {
+              "label": "npm",
+              "value": "npm",
+              "description": "Default Node.js package manager. Universal compatibility.",
+              "pros": ["Universal", "Zero setup", "Every tutorial uses it"],
+              "cons": ["Slower installs", "Flat node_modules", "Phantom dependencies"]
+            },
+            {
+              "label": "yarn (v4/berry)",
+              "value": "yarn",
+              "description": "Yarn with Plug'n'Play. Zero-install, strict dependency resolution.",
+              "pros": ["Zero-install possible", "Strict deps", "Fast"],
+              "cons": ["PnP compatibility issues", "Different mental model", "Some tools need patches"]
+            },
+            {
+              "label": "bun",
+              "value": "bun",
+              "description": "All-in-one runtime, bundler, and package manager. Extremely fast.",
+              "pros": ["Fastest everything", "Built-in bundler/test runner", "Drop-in Node replacement"],
+              "cons": ["Newer, less stable", "Some Node APIs missing", "Smaller ecosystem"]
+            }
+          ]
+        },
+        {
+          "id": "IP-Q13",
+          "question": "What test framework should be used?",
+          "header": "Test framework",
+          "type": "single",
+          "required": true,
+          "topics": ["platform", "testing"],
+          "default": "auto-detect",
+          "autoDetectField": "platform.testFramework",
+          "options": [
+            {
+              "label": "Vitest (Recommended)",
+              "value": "vitest",
+              "description": "Vite-native test framework. Fast, ESM-first, Jest-compatible API.",
+              "pros": ["Very fast", "ESM native", "Jest-compatible API", "Built-in coverage", "TypeScript out of box"],
+              "cons": ["Newer than Jest", "Slightly different config"]
+            },
+            {
+              "label": "Jest",
+              "value": "jest",
+              "description": "Most popular test framework. Mature, extensive ecosystem.",
+              "pros": ["Massive ecosystem", "Well-documented", "Snapshot testing", "Built-in mocking"],
+              "cons": ["Slower than Vitest", "ESM support still experimental", "Heavy config for TS"]
+            },
+            {
+              "label": "Node test runner (node:test)",
+              "value": "node-test",
+              "description": "Built-in Node.js test runner. Zero dependencies.",
+              "pros": ["Zero dependencies", "Built into Node", "Fast", "Simple"],
+              "cons": ["Less mature", "Fewer assertion helpers", "Limited ecosystem"]
+            },
+            {
+              "label": "Match existing project",
+              "value": "match-existing",
+              "description": "Use whatever test framework the project already uses. Auto-detect from package.json.",
+              "pros": ["Consistency", "No new tooling to learn", "Uses existing config"],
+              "cons": ["May not be the best choice for new code"]
+            }
+          ]
+        },
+        {
+          "id": "IP-Q14",
+          "question": "Any additional configuration the implementation agents should know about?",
+          "header": "Extra config",
+          "type": "open",
+          "required": false,
+          "topics": ["platform"],
+          "default": "",
+          "options": [
+            {
+              "label": "ESM modules (import/export)",
+              "description": "Use ES modules everywhere, no CommonJS require()"
+            },
+            {
+              "label": "Specific Node version",
+              "description": "Target a specific Node.js version (e.g., Node 20 LTS)"
+            },
+            {
+              "label": "Docker containerized",
+              "description": "Subsystems should include Dockerfile and health checks"
+            },
+            {
+              "label": "No additional config",
+              "description": "The defaults are fine"
+            }
+          ],
+          "followUps": []
+        }
+      ]
+    }
+  ],
+  "enforcement": {
+    "description": "ACIS enforces ALL 'how' preferences automatically after every implementation step. This is systemic — not user-configurable. Each preference maps to concrete verification checks. Violations BLOCK the step until fixed.",
+    "mechanism": "After each step commit, ACIS runs preference verification checks against changed files. If any check fails, the step is BLOCKED — the agent must fix violations before the commit is accepted. This creates a deterministic enforcement loop: implement → check → fix → re-check → commit.",
+    "maxRetries": 3,
+    "onMaxRetriesExceeded": "Step marked 'blocked' with violation details. User notified. Agent moves to next step.",
+    "preferenceChecks": {
+      "codingStyle.fileNaming": {
+        "description": "Verify all new/modified files match the chosen naming convention",
+        "checks": {
+          "kebab-case": "find ${worktree}/src -maxdepth 5 -name '*[A-Z]*' -not -path '*/node_modules/*' -not -name '*.test.*' -not -name '*.spec.*' | grep -v '__' | head -5",
+          "camelCase": "find ${worktree}/src -maxdepth 5 -name '*-*' -not -path '*/node_modules/*' | head -5",
+          "PascalCase": "find ${worktree}/src -maxdepth 5 \\( -name '*-*' -o -name '*_*' \\) -not -path '*/node_modules/*' | head -5",
+          "snake_case": "find ${worktree}/src -maxdepth 5 \\( -name '*[A-Z]*' -o -name '*-*' \\) -not -path '*/node_modules/*' | head -5"
+        },
+        "passCondition": "Command outputs zero lines (no naming violations)",
+        "fixInstruction": "Rename files to match the chosen naming convention"
+      },
+      "codingStyle.codeOrganization": {
+        "description": "Verify directory structure matches chosen organization pattern",
+        "checks": {
+          "feature-based": "Verify subsystem directory contains co-located types, logic, and test files",
+          "layer-based": "Verify types/, services/, controllers/ directories exist under subsystem",
+          "hybrid": "Verify feature directories exist with shared/ for cross-cutting concerns"
+        },
+        "passCondition": "Directory structure matches the spec boundary layout",
+        "fixInstruction": "Reorganize files to match the chosen code organization pattern"
+      },
+      "codingStyle.importStyle": {
+        "description": "Verify imports use the chosen style consistently",
+        "checks": {
+          "path-aliases": "grep -rn \"from '\\.\\.\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
+          "relative": "grep -rn \"from '@/\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
+          "package-imports": "grep -rn \"from '\\.\\.\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '"
+        },
+        "passCondition": "Count is 0 (no imports using the wrong style)",
+        "fixInstruction": "Convert all imports to the chosen import style"
+      },
+      "codingStyle.exportStyle": {
+        "description": "Verify exports match chosen pattern",
+        "checks": {
+          "named-exports": "grep -rn 'export default' ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
+          "mixed-exports": "0",
+          "barrel-exports": "[ -f ${worktree}/src/${subsystem}/index.ts ] || [ -f ${worktree}/src/${subsystem}/index.js ] && echo '0' || echo '1'"
+        },
+        "passCondition": "Violation count is 0 or barrel file exists",
+        "fixInstruction": "Convert exports to the chosen export pattern"
+      },
+      "errorHandling.strategy": {
+        "description": "Verify error handling follows chosen strategy",
+        "checks": {
+          "typed-errors": "grep -rn 'throw new Error(' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | wc -l | tr -d ' '",
+          "result-type": "grep -rn '^[^/]*throw ' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
+          "error-codes": "grep -rn 'throw new Error(' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'code:' | grep -v 'node_modules' | wc -l | tr -d ' '",
+          "mixed": "0"
+        },
+        "passCondition": "Count is 0 (no raw Error throws when typed-errors is chosen)",
+        "fixInstruction": "Replace raw Error throws with the chosen error handling pattern"
+      },
+      "logging.approach": {
+        "description": "Verify logging uses chosen approach — no raw console.* in production code",
+        "checks": {
+          "structured-logger": "grep -rn 'console\\.log\\|console\\.warn\\|console\\.error\\|console\\.info' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
+          "console-levels": "0",
+          "debug-namespaced": "grep -rn 'console\\.log' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
+          "minimal": "grep -rn 'console\\.log\\|console\\.info\\|console\\.debug' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '"
+        },
+        "passCondition": "Count is 0 (no raw console usage when structured logger is chosen)",
+        "fixInstruction": "Replace console.* calls with the chosen logging approach"
+      },
+      "debugging.traceLevel": {
+        "description": "Verify debug instrumentation matches chosen level",
+        "checks": {
+          "boundary-tracing": "For each function in spec.boundary.exports: verify entry/exit trace calls exist at function boundaries",
+          "comprehensive": "Verify OpenTelemetry span creation in each function with side effects",
+          "error-only": "Verify all catch blocks include context capture and breadcrumb logging",
+          "conditional": "Verify trace calls are gated behind environment variable or feature flag"
+        },
+        "passCondition": "Required instrumentation is present in public API methods",
+        "fixInstruction": "Add trace instrumentation at the required level"
+      },
+      "designPrinciples.solidAdherence": {
+        "description": "Verify SOLID principle adherence at the chosen level via agent code review",
+        "checks": {
+          "pragmatic-solid": "Agent review: (1) each file has single clear responsibility, (2) external service dependencies are injected, not hardcoded",
+          "strict-solid": "Agent review: (1) single responsibility per class/module, (2) all dependencies injected via interface, (3) interfaces segregated, (4) no inheritance behavioral changes",
+          "relaxed-solid": "0"
+        },
+        "passCondition": "Agent code review confirms compliance at chosen strictness level",
+        "fixInstruction": "Refactor code to meet SOLID adherence requirements"
+      },
+      "designPrinciples.dryStrategy": {
+        "description": "Verify DRY adherence at chosen threshold",
+        "checks": {
+          "rule-of-three": "Agent review: check for 3+ duplicated code blocks of 5+ lines within the subsystem",
+          "strict-dry": "Agent review: check for any duplicated code blocks of 3+ lines",
+          "wet": "0"
+        },
+        "passCondition": "No duplication above the threshold for the chosen strategy",
+        "fixInstruction": "Extract duplicated code into shared utilities"
+      },
+      "testing.strategy": {
+        "description": "Verify testing approach matches chosen strategy",
+        "checks": {
+          "test-alongside": "For each new .ts/.js implementation file in src/${subsystem}/, verify a co-located .test. or .spec. file exists",
+          "test-first": "Verify test files exist for all implementation files (commit order not mechanically verifiable)",
+          "integration-first": "Verify at least one integration test file exists in the subsystem test directory",
+          "minimal-tests": "Verify test files exist for files containing exported functions with business logic"
+        },
+        "passCondition": "Required test files exist per the chosen testing strategy",
+        "fixInstruction": "Create missing test files per the chosen testing strategy"
+      },
+      "platform.language": {
+        "description": "Verify language and strictness configuration matches chosen platform",
+        "checks": {
+          "typescript-strict": "Verify: (1) new files use .ts/.tsx extension, (2) no 'any' type usage (grep -rn ': any' src/${subsystem}/ | grep -v node_modules | wc -l)",
+          "typescript-standard": "Verify new files use .ts/.tsx extension",
+          "javascript-jsdoc": "Verify: (1) new files use .js/.jsx extension, (2) exported functions have @param/@returns JSDoc annotations",
+          "javascript": "Verify new files use .js/.jsx extension"
+        },
+        "passCondition": "File extensions and type strictness match chosen platform",
+        "fixInstruction": "Convert files to match the chosen language configuration"
+      }
+    },
+    "enforcementLoop": [
+      "1. Agent completes implementation step and stages changed files",
+      "2. ACIS scans staged files to determine which preference checks apply",
+      "3. ACIS runs ALL applicable preference checks (shell commands + agent reviews)",
+      "4. IF any check FAILS:",
+      "   a. Step is BLOCKED — commit is rejected",
+      "   b. Agent receives structured violation report: { check, preference, violation, files, fixInstruction }",
+      "   c. Agent fixes ALL violations in the same worktree",
+      "   d. Agent re-stages and re-attempts commit",
+      "   e. ACIS re-runs failed checks (loop back to step 3, up to maxRetries)",
+      "5. IF all checks PASS → commit accepted, step marked 'complete'",
+      "6. After maxRetries (3) failures → step marked 'blocked', violation details saved, user notified"
+    ],
+    "violationFormat": {
+      "check": "codingStyle.fileNaming",
+      "preference": "kebab-case",
+      "violation": "File 'src/auth/AuthService.ts' uses PascalCase instead of kebab-case",
+      "files": ["src/auth/AuthService.ts"],
+      "fixInstruction": "Rename to 'src/auth/auth-service.ts' and update all imports",
+      "severity": "BLOCK",
+      "attempt": 1
+    },
+    "complianceReport": {
+      "description": "Always generated at batch completion — systemic, not optional",
+      "sections": [
+        "Per-subsystem compliance summary",
+        "Total checks run / passed / failed-then-fixed / blocked",
+        "Violations that required agent retry (with details)",
+        "Final compliance score per preference category (0-100%)",
+        "Steps that were blocked and could not be auto-fixed"
+      ]
+    }
+  },
+  "outputSchema": {
+    "description": "The collected preferences are stored as implementation_preferences in the batch state and passed to each implementation agent. Split into 'what' (scope decisions) and 'how' (coding decisions). Enforcement is automatic — every 'how' preference becomes a verifiable check.",
+    "shape": {
+      "scope": {
+        "mvpSelection": "all-subsystems | core-only | manual-select",
+        "selectedSubsystems": ["SPEC-auth-service", "SPEC-sync-engine"],
+        "deferredSubsystems": ["SPEC-analytics"],
+        "priorityStrategy": "dependency-order | value-first | risk-first | inside-out",
+        "stubStrategy": "interface-stubs | mock-implementations | no-stubs",
+        "featureFlags": "environment-flags | config-flags | no-flags | flag-service",
+        "deliverables": ["code-tests-types", "include-api-docs"],
+        "milestoneConstraints": "string (from follow-up)"
+      },
+      "codingStyle": {
+        "fileNaming": "kebab-case | camelCase | PascalCase | snake_case",
+        "codeOrganization": "feature-based | layer-based | hybrid",
+        "importStyle": "path-aliases | relative | package-imports",
+        "exportStyle": "named-exports | mixed-exports | barrel-exports",
+        "componentNaming": "PascalCase (if specified in follow-up)"
+      },
+      "errorHandling": {
+        "strategy": "typed-errors | result-type | error-codes | mixed",
+        "globalErrorHandler": "boolean (from follow-up)"
+      },
+      "logging": {
+        "approach": "structured-logger | console-levels | debug-namespaced | minimal",
+        "subsystemNamespaces": "boolean (from follow-up)"
+      },
+      "debugging": {
+        "traceLevel": "boundary-tracing | comprehensive | error-only | conditional",
+        "includePayloads": "boolean (from follow-up)",
+        "piiRedaction": "boolean (from follow-up)"
+      },
+      "designPrinciples": {
+        "solidAdherence": "pragmatic-solid | strict-solid | relaxed-solid",
+        "solidEmphasis": "string (from follow-up, e.g., 'DIP for external services')",
+        "dryStrategy": "rule-of-three | strict-dry | wet",
+        "sharedCodeLocation": "string (from follow-up)"
+      },
+      "testing": {
+        "strategy": "test-alongside | test-first | integration-first | minimal-tests",
+        "mockStrategy": "string (from follow-up)",
+        "framework": "vitest | jest | node-test | match-existing"
+      },
+      "platform": {
+        "language": "typescript-strict | typescript-standard | javascript-jsdoc | javascript",
+        "packageManager": "pnpm | npm | yarn | bun",
+        "additionalConfig": "string (from open question)"
+      }
+    }
+  }
+}

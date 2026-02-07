@@ -119,15 +119,59 @@ For each issue detected, categorize:
     └─────────┘└────────┘└─────────┘└────────┘
 ```
 
-#### Phase 0.5: Spot-Check Sampling (10%)
+#### Phase 0.5: Risk-Weighted Spot-Check Sampling
 
-Even for valid soft-skips, randomly sample 10% for re-verification:
+Instead of flat 10% sampling, use a risk-weighted formula:
+
+```
+rate = 0.10 × severity_multiplier × confidence_inverse × age_factor
+
+Where:
+  severity_multiplier:  critical=4.0, high=2.5, medium=1.0, low=0.5
+  confidence_inverse:   high=0.5, medium=1.0, low=2.0
+  age_factor:           days_since_verified / 30 (capped at 3.0, min 0.5)
+  rate is clamped to [0.025, 1.0] (2.5% minimum, 100% maximum)
+
+Examples:
+  critical + low confidence + 90 days old = 0.10 × 4.0 × 2.0 × 3.0 = 2.4 → clamped to 1.0 (100% check)
+  low + high confidence + 7 days old     = 0.10 × 0.5 × 0.5 × 0.23 = 0.006 → clamped to 0.025 (2.5%)
+  medium + medium confidence + 30 days   = 0.10 × 1.0 × 1.0 × 1.0 = 0.10 (10%, same as before)
+```
 
 ```bash
-# Random sampling for spot-checks
+# Risk-weighted sampling for spot-checks
 should_spot_check() {
-  local random=$((RANDOM % 100))
-  [ $random -lt 10 ] && echo "YES" || echo "NO"
+  local severity="$1"     # critical|high|medium|low
+  local confidence="$2"   # high|medium|low
+  local days_old="$3"     # integer
+
+  # Compute rate (simplified for Bash 3.2 - integer arithmetic)
+  # Multiply by 1000 for precision, compare against random 0-999
+  local sev_mult=10  # medium default (x1.0 * 10)
+  case "$severity" in
+    "critical") sev_mult=40 ;;
+    "high")     sev_mult=25 ;;
+    "low")      sev_mult=5 ;;
+  esac
+
+  local conf_inv=10  # medium default (x1.0 * 10)
+  case "$confidence" in
+    "high") conf_inv=5 ;;
+    "low")  conf_inv=20 ;;
+  esac
+
+  # age_factor: days/30, capped at 30 (representing 3.0 * 10)
+  local age_f=$((days_old * 10 / 30))
+  [ "$age_f" -lt 5 ] && age_f=5
+  [ "$age_f" -gt 30 ] && age_f=30
+
+  # rate = (100 * sev * conf * age) / (10 * 10 * 10) = sev*conf*age/10
+  local rate=$((sev_mult * conf_inv * age_f / 10))
+  [ "$rate" -lt 25 ] && rate=25      # 2.5% floor
+  [ "$rate" -gt 1000 ] && rate=1000  # 100% ceiling
+
+  local random=$((RANDOM % 1000))
+  [ $random -lt $rate ] && echo "YES" || echo "NO"
 }
 
 # Run spot-check: re-run detection command
@@ -362,9 +406,27 @@ For each quantifiable issue, create a goal file:
 }
 ```
 
-### Step 6: Measure Baselines
+### Step 6: Validate & Measure Baselines
 
-For each generated goal, run the detection command to establish baseline:
+#### Step 6.1: Detection Command Dry-Run Validation
+
+Before measuring baselines, validate each detection command will work correctly:
+
+For each generated goal file, validate `detection.command`:
+
+1. **Execute in subshell**: Run command, capture exit code, stdout, stderr
+2. **Validate exit code**: Must be 0. If non-zero → WARN and mark goal as `needs_review`
+3. **Validate stderr**: Must be empty. If non-empty → WARN: "Detection command produced stderr"
+4. **Validate stdout**: Must be non-empty. If empty → WARN: "Detection command produced no output — baseline will be 0"
+5. **Validate output format**: stdout must be parseable as integer/float (not prose)
+6. **Validate Bash 3.2 compatibility**: Scan command for forbidden constructs:
+   - `declare -A`, `mapfile`, `readarray`, `${var,,}`, `${var^^}`, `shopt -s globstar` → REJECT goal with error
+
+Goals with invalid detection commands are flagged in the extraction report as `DETECTION_INVALID`.
+
+#### Step 6.2: Measure Baselines
+
+For each validated goal, run the detection command to establish baseline:
 
 ```bash
 for goal_file in "$goals_dir"/PR${pr_number}-*.json; do

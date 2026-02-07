@@ -258,14 +258,33 @@ Task({
 })
 ```
 
-### 1.2 Agent Outputs
+### 1.2 Structured Output Validation
 
-| Agent | Output File | Content |
-|-------|-------------|---------|
-| Persona Analyst | `docs/genesis/PERSONAS_DRAFT.md` | Personas, needs, accessibility, tech comfort |
-| Journey Mapper | `docs/genesis/JOURNEYS_DRAFT.md` | User flows, touchpoints, pain points |
-| Event Stormer | `docs/genesis/EVENTS_DRAFT.md` | Domain events, commands, aggregates |
-| Similar Systems | `docs/genesis/SIMILAR_SYSTEMS_ANALYSIS.md` | Patterns: ADOPT/ADAPT/AVOID/INNOVATE |
+Each Layer 1 agent MUST include a ` ```json ``` ` block in their output conforming to their output schema. The orchestrator validates outputs before proceeding.
+
+| Agent | Output File | Schema | Content |
+|-------|-------------|--------|---------|
+| Persona Analyst | `docs/genesis/PERSONAS_DRAFT.md` | `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-persona-output.schema.json` | Personas, needs, accessibility, tech comfort |
+| Journey Mapper | `docs/genesis/JOURNEYS_DRAFT.md` | `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-journey-output.schema.json` | User flows, touchpoints, pain points |
+| Event Stormer | `docs/genesis/EVENTS_DRAFT.md` | `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-events-output.schema.json` | Domain events, commands, aggregates |
+| Similar Systems | `docs/genesis/SIMILAR_SYSTEMS_ANALYSIS.md` | `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-similar-systems-output.schema.json` | Patterns: ADOPT/ADAPT/AVOID/INNOVATE |
+
+#### Validation Flow
+
+For each agent output:
+1. Extract the ` ```json ``` ` block from the agent's markdown output
+2. Validate against the corresponding schema
+3. If **valid**: Extract structured JSON, store alongside markdown as `{filename}.json`
+4. If **invalid**: Log validation errors, re-invoke agent with error details (max 2 retries):
+   ```
+   "Your output failed schema validation. Errors:
+   - missing required field 'personas[0].key_need'
+   - 'tech_comfort' must be one of: low, medium, high
+   Please regenerate with a valid ```json``` block conforming to the schema."
+   ```
+5. If invalid after 2 retries: WARN user, proceed with best-effort parsing
+
+The Synthesis Agent (Layer 2) receives validated JSON from all Layer 1 agents instead of parsing markdown heuristically.
 
 ---
 

@@ -19,7 +19,8 @@
       "properties": {
         "problem": {
           "type": "string",
-          "description": "Problem statement - what problem is being solved"
+          "description": "Problem statement - what problem is being solved (must be descriptive)",
+          "minLength": 20
         },
         "solution": {
           "type": "string",
@@ -45,11 +46,13 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Persona name (e.g., 'Brenda')"
+            "description": "Persona name (e.g., 'Brenda') - must be 2+ words or a proper noun",
+            "minLength": 2
           },
           "role": {
             "type": "string",
-            "description": "Role description (e.g., 'elderly patient')"
+            "description": "Role description (e.g., 'elderly patient') - must be descriptive",
+            "minLength": 2
           },
           "type": {
             "type": "string",
@@ -129,7 +132,9 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Metric identifier (snake_case)"
+            "description": "Metric identifier (snake_case, minimum 3 chars)",
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9_]*$"
           },
           "name": {
             "type": "string",
@@ -295,6 +300,24 @@
       "type": "integer",
       "description": "Goals achieved since last audit",
       "default": 0
+    },
+    "preCommitReview": {
+      "type": "object",
+      "description": "Pre-commit review configuration",
+      "properties": {
+        "defaultMode": {
+          "type": "string",
+          "enum": ["strict", "advisory"],
+          "default": "strict",
+          "description": "Default mode for pre-commit review. strict: BLOCK verdict prevents commit (exit 1). advisory: BLOCK is informational only."
+        },
+        "blockOnSeverity": {
+          "type": "string",
+          "enum": ["any", "important", "blocking"],
+          "default": "any",
+          "description": "Minimum severity level that triggers a block in strict mode"
+        }
+      }
     },
     "pluginDefaults": {
       "type": "object",

@@ -16,6 +16,13 @@
           "type": "open",
           "required": true,
           "topics": ["problem"],
+          "answerQuality": {
+            "minWords": 10,
+            "mustContainVerb": true,
+            "rejectPatterns": ["stuff", "things", "various", "idk", "dunno"],
+            "maxRetries": 2,
+            "rejectionMessage": "A problem statement needs to describe what happens to whom. Can you give me at least a sentence?"
+          },
           "redFlags": {
             "patterns": ["everything", "lots of things", "many problems"],
             "action": "stop",
@@ -51,6 +58,13 @@
           "type": "open",
           "required": true,
           "topics": ["target-user"],
+          "answerQuality": {
+            "minWords": 5,
+            "mustContainVerb": false,
+            "rejectPatterns": ["everyone", "anybody", "people", "users"],
+            "maxRetries": 2,
+            "rejectionMessage": "Please describe a specific person or group (e.g., 'elderly patients managing multiple medications')."
+          },
           "redFlags": {
             "patterns": ["everyone", "anybody", "all people", "the general public"],
             "action": "stop",

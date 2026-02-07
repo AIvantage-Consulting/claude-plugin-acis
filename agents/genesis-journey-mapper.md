@@ -267,6 +267,18 @@ Issues that need resolution:
 - Forget about edge cases
 - Skip emotional analysis
 
+## Structured JSON Output (MANDATORY)
+
+In addition to the markdown output above, you MUST include a ` ```json ``` ` block conforming to `${CLAUDE_PLUGIN_ROOT}/schemas/genesis-journey-output.schema.json`.
+
+The JSON block must contain:
+- `journeys[]`: Array of journey objects with id (J1, J2...), persona_id, name, trigger, steps, outcome, failure_modes
+- `touchpoints[]`: All system interaction points across journeys
+- `pain_points[]`: Identified pain points with severity and affected journeys
+- `analysis_metadata`: Agent ID, timestamp, confidence level
+
+This structured output enables the Synthesis Agent (Layer 2) to consume validated data instead of parsing markdown heuristically.
+
 ## Quality Checklist
 
 Before finalizing output:

@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "genesis-events-output.schema.json",
+  "title": "GENESIS Event Stormer Output",
+  "description": "Structured output schema for the genesis-event-stormer agent (Layer 1). Agent must include a ```json``` block conforming to this schema.",
+  "type": "object",
+  "required": ["domain_events", "commands", "aggregates", "read_models", "analysis_metadata"],
+  "properties": {
+    "domain_events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "trigger", "aggregate"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^EVT-[0-9]+$",
+            "description": "Event identifier (e.g., EVT-001)"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 5,
+            "description": "Event name in past tense (e.g., 'MedicationReminderScheduled')"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": ["command", "external", "time", "policy"],
+            "description": "What triggers this event"
+          },
+          "aggregate": {
+            "type": "string",
+            "description": "Which aggregate owns this event"
+          },
+          "data_payload": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["field", "type"],
+              "properties": {
+                "field": { "type": "string" },
+                "type": { "type": "string" },
+                "phi": { "type": "boolean", "default": false }
+              }
+            }
+          },
+          "downstream_effects": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Events or commands triggered by this event"
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "actor", "target_aggregate"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CMD-[0-9]+$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Command name in imperative (e.g., 'ScheduleMedicationReminder')"
+          },
+          "actor": {
+            "type": "string",
+            "description": "Who/what issues this command"
+          },
+          "target_aggregate": { "type": "string" },
+          "validation_rules": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "produces_events": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "aggregates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "invariants"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "invariants": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Business rules that must always be true"
+          },
+          "events_owned": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "read_models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "purpose", "built_from"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "purpose": { "type": "string" },
+          "built_from": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Event IDs this read model projects from"
+          }
+        }
+      }
+    },
+    "bounded_contexts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "aggregates"],
+        "properties": {
+          "name": { "type": "string" },
+          "aggregates": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target_context": { "type": "string" },
+                "type": {
+                  "type": "string",
+                  "enum": ["partnership", "shared-kernel", "customer-supplier", "conformist", "anti-corruption-layer", "open-host-service"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "analysis_metadata": {
+      "type": "object",
+      "required": ["agent_id", "timestamp"],
+      "properties": {
+        "agent_id": { "type": "string", "const": "genesis-event-stormer" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    }
+  }
+}

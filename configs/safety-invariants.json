@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIS Safety Invariants",
+  "description": "Pre/post invariant checks run between FIX and CHECKPOINT in the ralph-loop. Violations trigger revert or retry.",
+  "version": "1.0.0",
+  "invariants": [
+    {
+      "id": "test_file_count",
+      "name": "Test file count must not decrease",
+      "description": "Remediations must never delete test files. Test count after FIX must be >= test count before FIX.",
+      "pre_command": "find . -name '*.test.*' -o -name '*.spec.*' | grep -v node_modules | wc -l | tr -d ' '",
+      "post_command": "find . -name '*.test.*' -o -name '*.spec.*' | grep -v node_modules | wc -l | tr -d ' '",
+      "comparison": "post_gte_pre",
+      "on_violation": "revert_and_abort",
+      "severity": "critical",
+      "message": "Test file count decreased from {pre_value} to {post_value}. This violates the 'no test deletion' safety rule."
+    },
+    {
+      "id": "ts_ignore_count",
+      "name": "@ts-ignore count must not increase",
+      "description": "Remediations must not introduce new @ts-ignore suppressions.",
+      "pre_command": "grep -r '@ts-ignore\\|@ts-expect-error' --include='*.ts' --include='*.tsx' . | grep -v node_modules | wc -l | tr -d ' '",
+      "post_command": "grep -r '@ts-ignore\\|@ts-expect-error' --include='*.ts' --include='*.tsx' . | grep -v node_modules | wc -l | tr -d ' '",
+      "comparison": "post_lte_pre",
+      "on_violation": "warn_and_retry",
+      "severity": "high",
+      "message": "@ts-ignore count increased from {pre_value} to {post_value}. Remediations must not suppress type errors."
+    },
+    {
+      "id": "eslint_disable_count",
+      "name": "eslint-disable count must not increase",
+      "description": "Remediations must not introduce new eslint-disable comments.",
+      "pre_command": "grep -r 'eslint-disable' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' . | grep -v node_modules | wc -l | tr -d ' '",
+      "post_command": "grep -r 'eslint-disable' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' . | grep -v node_modules | wc -l | tr -d ' '",
+      "comparison": "post_lte_pre",
+      "on_violation": "warn_and_retry",
+      "severity": "medium",
+      "message": "eslint-disable count increased from {pre_value} to {post_value}. Remediations should fix issues, not suppress them."
+    },
+    {
+      "id": "any_type_count",
+      "name": "'any' type usage must not increase",
+      "description": "Remediations must not introduce new 'any' type annotations in TypeScript.",
+      "pre_command": "grep -r ': any\\b\\|as any\\b' --include='*.ts' --include='*.tsx' . | grep -v node_modules | grep -v '.d.ts' | wc -l | tr -d ' '",
+      "post_command": "grep -r ': any\\b\\|as any\\b' --include='*.ts' --include='*.tsx' . | grep -v node_modules | grep -v '.d.ts' | wc -l | tr -d ' '",
+      "comparison": "post_lte_pre",
+      "on_violation": "warn_and_retry",
+      "severity": "medium",
+      "message": "'any' type usage increased from {pre_value} to {post_value}. Use proper types instead of 'any'."
+    }
+  ],
+  "comparison_rules": {
+    "post_gte_pre": "Post-FIX value must be greater than or equal to pre-FIX value",
+    "post_lte_pre": "Post-FIX value must be less than or equal to pre-FIX value",
+    "post_eq_pre": "Post-FIX value must equal pre-FIX value",
+    "post_gt_pre": "Post-FIX value must be strictly greater than pre-FIX value"
+  },
+  "violation_actions": {
+    "revert_and_abort": {
+      "description": "Revert all uncommitted changes (git checkout -- .) and abort the current iteration",
+      "command": "git checkout -- .",
+      "continues_loop": false
+    },
+    "warn_and_retry": {
+      "description": "Log the violation, warn the user, and allow one retry of the FIX step",
+      "max_retries": 1,
+      "continues_loop": true
+    }
+  },
+  "global_settings": {
+    "enabled_by_default": true,
+    "skip_flag": "--skip-invariants",
+    "run_between": ["FIX", "CHECKPOINT"],
+    "bash_compatibility": "3.2",
+    "notes": "All commands must be POSIX-compatible (no Bash 4+ features)"
+  }
+}

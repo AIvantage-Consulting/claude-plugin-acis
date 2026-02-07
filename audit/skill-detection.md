@@ -227,6 +227,47 @@ All detection commands in skills MUST work on macOS Bash 3.2.
 
 ## Edge Cases
 
+### Skill Deduplication (MANDATORY before generation)
+
+Before generating ANY new skill, perform deduplication checks against existing skills:
+
+#### Step 1: Scan Existing Skills
+
+```bash
+# Find all existing skill definitions
+existing_skills=$(find skills/*/SKILL.md -type f 2>/dev/null)
+```
+
+#### Step 2: Check for Exact Duplicates
+
+For each candidate, compare against existing skills:
+- Extract detection command from candidate and existing SKILL.md
+- Extract step sequence from candidate and existing SKILL.md
+- If detection command AND step sequence are identical → **SKIP** with trace:
+  ```
+  SKILL_DEDUP: Candidate "{candidate_name}" is exact duplicate of existing skill "{existing_name}". Skipping.
+  ```
+
+#### Step 3: Check for Semantic Overlap
+
+If not an exact duplicate, check for semantic overlap:
+- Compare step sequences: count shared steps between candidate and each existing skill
+- If 80%+ steps are shared → **MERGE** instead of creating new:
+  1. Identify variant steps (steps in candidate but not in existing)
+  2. Add variant steps to existing skill's `variants` section
+  3. Update existing skill's frequency count
+  4. Trace: `SKILL_MERGE: Candidate "{candidate_name}" merged into existing skill "{existing_name}" (82% overlap, 2 variant steps added).`
+
+#### Step 4: Deduplication Report
+
+After checking all candidates, output deduplication summary:
+
+| Candidate | Status | Action | Notes |
+|-----------|--------|--------|-------|
+| {name} | UNIQUE | Generate new skill | No overlap with existing |
+| {name} | DUPLICATE | Skipped | Exact match with {existing} |
+| {name} | OVERLAP_82% | Merged into {existing} | 2 variant steps added |
+
 ### Overlapping Patterns
 
 If two skill candidates share 80%+ steps:
@@ -237,7 +278,7 @@ If two skill candidates share 80%+ steps:
 ### Deprecated Patterns
 
 If a skill candidate duplicates an existing skill:
-1. Skip generation
+1. Skip generation with trace
 2. Note in audit report
 3. Consider if existing skill needs update
 
