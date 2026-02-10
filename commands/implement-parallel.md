@@ -395,8 +395,13 @@ For each parallel group (sequential between groups):
        - Language: ${preferences.platform.language}
 
        These are NOT suggestions. Every preference above is verified after each
-       step via automated checks. If your code violates any preference, the
-       commit will be REJECTED and you must fix it before proceeding.
+       step via a Three-Tier Enforcement Engine:
+       - T1: Comment-stripped pattern matching (fast, catches naming/logging)
+       - T2: AST structural analysis (TypeScript API, catches imports/exports/types/errors)
+       - T3: Schema-constrained agent review (semantic, catches SOLID/DRY/design patterns)
+
+       If your code violates ANY preference, the commit will be REJECTED and
+       you must fix it before proceeding. Violations include file:line evidence.
 
        Follow the step manifest. For each step:
        1. Create/modify files following the preferences above
@@ -423,28 +428,75 @@ For each parallel group (sequential between groups):
          Run spec.verification.test_command (if tests exist for this step)
          Run spec.verification.lint_command (if applicable)
 
-      3. VERIFY STEP — PREFERENCE ENFORCEMENT
-         Run each check in batch.enforcement_ruleset against changed files:
+      3. VERIFY STEP — THREE-TIER PREFERENCE ENFORCEMENT
+         Load enforcement engine: configs/enforcement-engine.json
+         Load script library: templates/ast-verification-scripts.md
 
-         For each check in enforcement_ruleset:
-           IF check.type == "shell":
-             Run check.command (Bash 3.2 compatible)
-             IF output is non-empty or count > 0 → VIOLATION
-           ELIF check.type == "agent-review":
-             Agent self-reviews against check.criteria
-             IF non-compliant → VIOLATION
+         STEP 3a. TIER PREREQUISITE CHECK (once per worktree):
+           T2_AVAILABLE = node -e "try{require('typescript');process.exit(0)}catch(e){process.exit(1)}"
+           NPX_AVAILABLE = which npx >/dev/null 2>&1
+           If T2 not available: WARN "TypeScript not found. T2 checks will fall back to T1."
+
+         STEP 3b. TWO-STAGE DETECTION (if > 5 changed files):
+           Stage 1 — T1 fast filter on ALL changed files:
+             For each changed file (non-test, non-spec):
+               Strip comments: node -e "...comment strip..." ${file}
+               Check patterns for each T1-eligible check
+               IF match → add to candidates list
+
+           Stage 2 — T2/T3 verification on CANDIDATES ONLY:
+             For each candidate file:
+               Run the check at its recommendedTier (T2 or T3)
+
+         STEP 3c. EXECUTE CHECKS PER TIER:
+
+           For each check in enforcement_ruleset:
+             tier = check.recommendedTier
+
+             IF tier == "T1" (comment-stripped pattern matching):
+               Strip comments from each file via node -e
+               Run pattern match on stripped source
+               IF output is non-empty → VIOLATION (with file:line evidence)
+
+             ELIF tier == "T2" (AST structural analysis):
+               IF T2_AVAILABLE:
+                 Run AST script from ast-verification-scripts.md
+                 Uses TypeScript API: node -e "const ts=require('typescript')..."
+                 IF exit code 1 → VIOLATION (with AST-derived file:line evidence)
+               ELSE:
+                 WARN "Falling back to T1 for ${check.check_id}"
+                 Run T1 command instead
+
+             ELIF tier == "T3" (schema-constrained agent review):
+               Agent reviews code with MANDATORY JSON output:
+               {
+                 "verdict": "PASS" | "FAIL",
+                 "violations": [{ file, line, rule, description, severity, suggested_fix }],
+                 "confidence": 0.0-1.0,
+                 "evidence": ["specific code citations"]
+               }
+
+               VALIDATE agent output:
+                 IF not valid JSON → WARN, fall back to T2
+                 IF verdict not in [PASS, FAIL] → WARN, fall back to T2
+                 IF confidence < 0.7 → Cross-verify with T2 before accepting
+
+               IF verdict == "FAIL" → VIOLATION (with agent evidence)
+
+         STEP 3d. VIOLATION HANDLING:
 
          IF violations found:
            a. Collect all violations into structured report:
-              [{ check, preference, violation, files, fixInstruction }]
-           b. Agent receives violation report
-           c. Agent MUST fix all violations (rename files, refactor code, etc.)
-           d. Return to step 3 (re-run preference checks)
+              [{ check, preference, tier, violation, file, line, fixInstruction, evidence }]
+           b. Agent receives violation report with tier-specific evidence
+           c. Agent MUST fix all violations in the same worktree
+           d. Return to step 3c (re-run ONLY failed checks, not all checks)
            e. Maximum 3 retry attempts per step
 
          IF max retries exceeded:
            Mark step as 'blocked' with violation details
            Record in batch.compliance.blocked_steps
+           Record tier usage statistics
            Notify user: "Step ${step_id} blocked after 3 preference enforcement attempts"
            Continue to next step
 
@@ -710,7 +762,7 @@ Display batch status:
 | **Conflict visibility** | Full atomic history in integration branch |
 | **GENESIS traceability** | Each spec links back to source documents |
 | **ADR compliance** | Constraints from ADRs enforced in spec |
-| **Preference enforcement** | Every "how" preference verified after every step; violations block commits |
+| **Three-tier enforcement** | T1 (comment-stripped grep) → T2 (AST/compiler) → T3 (schema-constrained agent review); violations block commits with file:line evidence |
 | **Recovery from any point** | Batch state checkpointed every step |
 
 ## Examples

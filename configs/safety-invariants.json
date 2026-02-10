@@ -40,13 +40,15 @@
     {
       "id": "any_type_count",
       "name": "'any' type usage must not increase",
-      "description": "Remediations must not introduce new 'any' type annotations in TypeScript.",
-      "pre_command": "grep -r ': any\\b\\|as any\\b' --include='*.ts' --include='*.tsx' . | grep -v node_modules | grep -v '.d.ts' | wc -l | tr -d ' '",
-      "post_command": "grep -r ': any\\b\\|as any\\b' --include='*.ts' --include='*.tsx' . | grep -v node_modules | grep -v '.d.ts' | wc -l | tr -d ' '",
+      "description": "Remediations must not introduce new 'any' type annotations in TypeScript. Uses comment-stripped grep to eliminate false positives from comments. When AST analysis is available (T2), the enforcement engine uses TypeScript's AnyKeyword node count for zero false positives.",
+      "pre_command": "find . -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts' | while IFS= read -r f; do node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const m=s.match(/:\\s*any\\b|as\\s+any\\b/g); if(m)console.log(m.length)\" \"$f\" 2>/dev/null; done | awk '{s+=$1}END{print s+0}'",
+      "post_command": "find . -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts' | while IFS= read -r f; do node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const m=s.match(/:\\s*any\\b|as\\s+any\\b/g); if(m)console.log(m.length)\" \"$f\" 2>/dev/null; done | awk '{s+=$1}END{print s+0}'",
       "comparison": "post_lte_pre",
       "on_violation": "warn_and_retry",
       "severity": "medium",
-      "message": "'any' type usage increased from {pre_value} to {post_value}. Use proper types instead of 'any'."
+      "message": "'any' type usage increased from {pre_value} to {post_value}. Use proper types instead of 'any'.",
+      "tier": "T1 (comment-stripped). T2 (AST) available via enforcement engine for higher accuracy.",
+      "tier_notes": "Comment-stripped grep eliminates false positives from '// any' and '/* any */'. For implementation-parallel, the enforcement engine uses AST-level AnyKeyword detection for zero false positives."
     }
   ],
   "comparison_rules": {

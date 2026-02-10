@@ -32,7 +32,7 @@ You are executing the ACIS help system. This command dynamically discovers and d
    Output in this format:
    ```
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  ACIS v2.9.0 - Automated Code Improvement System                            ║
+   ║  ACIS v2.10.0 - Automated Code Improvement System                           ║
    ║  https://github.com/aivantage-consulting/claude-plugin-acis                 ║
    ╠══════════════════════════════════════════════════════════════════════════════╣
    ║                                                                              ║

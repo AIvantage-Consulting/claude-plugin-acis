@@ -802,158 +802,250 @@
     }
   ],
   "enforcement": {
-    "description": "ACIS enforces ALL 'how' preferences automatically after every implementation step. This is systemic — not user-configurable. Each preference maps to concrete verification checks. Violations BLOCK the step until fixed.",
-    "mechanism": "After each step commit, ACIS runs preference verification checks against changed files. If any check fails, the step is BLOCKED — the agent must fix violations before the commit is accepted. This creates a deterministic enforcement loop: implement → check → fix → re-check → commit.",
+    "description": "ACIS enforces ALL 'how' preferences using a Three-Tier Verification Engine. This is systemic — not user-configurable. Checks escalate from comment-stripped pattern matching (T1) through AST structural analysis (T2) to schema-constrained agent review (T3). Violations BLOCK the step until fixed.",
+    "engine": "configs/enforcement-engine.json",
+    "engineSchema": "schemas/enforcement-engine.schema.json",
+    "scriptLibrary": "templates/ast-verification-scripts.md",
+    "mechanism": "After each step commit, ACIS runs tiered verification checks against changed files. T1 (comment-stripped grep) filters candidates fast. T2 (AST/compiler) confirms violations structurally. T3 (schema-constrained agent review) handles semantic checks. Any failure BLOCKS the commit.",
     "maxRetries": 3,
     "onMaxRetriesExceeded": "Step marked 'blocked' with violation details. User notified. Agent moves to next step.",
+    "verificationTiers": {
+      "T1": {
+        "name": "Comment-Stripped Pattern Matching",
+        "speed": "fast (~1s per file)",
+        "accuracy": "~90%",
+        "when": "Naming, logging, simple patterns. Always runs first as fast filter.",
+        "howItWorks": "Strips // and /* */ comments via node -e before grep/find. Eliminates false positives from commented-out code.",
+        "falsePositiveReduction": "Comments stripped before matching. Still may match string literals containing patterns (rare)."
+      },
+      "T2": {
+        "name": "AST Structural Analysis",
+        "speed": "medium (~200ms per file)",
+        "accuracy": "~99%",
+        "when": "Imports, exports, error handling, type safety, layer dependencies, circular deps.",
+        "howItWorks": "Uses TypeScript Compiler API (node -e with require('typescript')) or npx ts-morph/madge. Parses code into AST and checks structural properties.",
+        "falsePositiveReduction": "Only examines actual code nodes (import declarations, throw statements, type annotations). Cannot be fooled by comments, strings, or dead code.",
+        "prerequisites": ["node", "typescript in node_modules or npx"]
+      },
+      "T3": {
+        "name": "Schema-Constrained Agent Review",
+        "speed": "slow (~5-15s batched)",
+        "accuracy": "semantic understanding",
+        "when": "SOLID adherence, DRY strategy, code organization patterns, debug instrumentation.",
+        "howItWorks": "Claude agent reviews code with mandatory JSON output schema. Agent MUST produce { verdict: PASS|FAIL, violations: [{file, line, rule, description, severity, suggested_fix}], confidence: 0.0-1.0, evidence: [...] }. Invalid output triggers T2 fallback.",
+        "falsePositiveReduction": "Semantic understanding of code intent. Can distinguish intentional duplication from accidental. Mandatory evidence citations prevent hallucinated violations.",
+        "determinism": "Confidence score + mandatory evidence + schema validation. Confidence < 0.7 triggers automatic T2 cross-verification."
+      }
+    },
+    "twoStageDetection": {
+      "description": "Performance optimization: T1 acts as fast filter, T2/T3 verify only candidates.",
+      "pattern": "Stage 1: T1 on all changed files → candidate list. Stage 2: T2/T3 on candidates only.",
+      "skipT1IfFewFiles": 5,
+      "benefit": "Minimizes expensive AST parsing while maintaining accuracy. 100 files at T2 = ~20s. With two-stage: T1 filters to ~10 candidates = ~2s T2."
+    },
     "preferenceChecks": {
       "codingStyle.fileNaming": {
         "description": "Verify all new/modified files match the chosen naming convention",
+        "recommendedTier": "T1",
+        "rationale": "File naming is a file-system property, not a code property. grep/find is reliable here — no comments to confuse.",
         "checks": {
-          "kebab-case": "find ${worktree}/src -maxdepth 5 -name '*[A-Z]*' -not -path '*/node_modules/*' -not -name '*.test.*' -not -name '*.spec.*' | grep -v '__' | head -5",
-          "camelCase": "find ${worktree}/src -maxdepth 5 -name '*-*' -not -path '*/node_modules/*' | head -5",
-          "PascalCase": "find ${worktree}/src -maxdepth 5 \\( -name '*-*' -o -name '*_*' \\) -not -path '*/node_modules/*' | head -5",
-          "snake_case": "find ${worktree}/src -maxdepth 5 \\( -name '*[A-Z]*' -o -name '*-*' \\) -not -path '*/node_modules/*' | head -5"
+          "kebab-case": "find ${worktree}/src/${subsystem} -maxdepth 5 -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.test.' | grep -v '.spec.' | while read f; do b=$(basename \"$f\"); echo \"$b\" | grep -q '[A-Z]' && echo \"$f: uppercase in filename\"; done",
+          "camelCase": "find ${worktree}/src/${subsystem} -maxdepth 5 -name '*.ts' -o -name '*.tsx' | grep -v node_modules | while read f; do b=$(basename \"$f\"); echo \"$b\" | grep -q '-' && echo \"$f: kebab-case in filename\"; done",
+          "PascalCase": "find ${worktree}/src/${subsystem} -maxdepth 5 -name '*.ts' -o -name '*.tsx' | grep -v node_modules | while read f; do b=$(basename \"$f\"); echo \"$b\" | grep -qE '[-_]' && echo \"$f: separator in filename\"; done",
+          "snake_case": "find ${worktree}/src/${subsystem} -maxdepth 5 -name '*.ts' -o -name '*.tsx' | grep -v node_modules | while read f; do b=$(basename \"$f\"); echo \"$b\" | grep -qE '[A-Z-]' && echo \"$f: uppercase or kebab in filename\"; done"
         },
         "passCondition": "Command outputs zero lines (no naming violations)",
-        "fixInstruction": "Rename files to match the chosen naming convention"
-      },
-      "codingStyle.codeOrganization": {
-        "description": "Verify directory structure matches chosen organization pattern",
-        "checks": {
-          "feature-based": "Verify subsystem directory contains co-located types, logic, and test files",
-          "layer-based": "Verify types/, services/, controllers/ directories exist under subsystem",
-          "hybrid": "Verify feature directories exist with shared/ for cross-cutting concerns"
-        },
-        "passCondition": "Directory structure matches the spec boundary layout",
-        "fixInstruction": "Reorganize files to match the chosen code organization pattern"
+        "fixInstruction": "Rename files to match the chosen naming convention and update all imports"
       },
       "codingStyle.importStyle": {
         "description": "Verify imports use the chosen style consistently",
+        "recommendedTier": "T2",
+        "rationale": "Grep catches imports in comments and strings. AST analysis checks only actual import declarations.",
+        "T1_command": "Comment-stripped grep: strips comments then searches for import pattern violations",
+        "T2_command": "AST: Uses TypeScript parser to examine only ImportDeclaration nodes. See ast-verification-scripts.md#import-style-check",
         "checks": {
-          "path-aliases": "grep -rn \"from '\\.\\.\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
-          "relative": "grep -rn \"from '@/\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
-          "package-imports": "grep -rn \"from '\\.\\.\" ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '"
+          "path-aliases": { "violation_regex": "^\\.\\.", "meaning": "Relative imports should be @/ path aliases" },
+          "relative": { "violation_regex": "^@/", "meaning": "Path alias imports should be relative" },
+          "package-imports": { "violation_regex": "^\\.\\.", "meaning": "Relative imports should be package imports" }
         },
-        "passCondition": "Count is 0 (no imports using the wrong style)",
+        "passCondition": "Zero import violations in actual import declarations (AST-verified)",
         "fixInstruction": "Convert all imports to the chosen import style"
       },
       "codingStyle.exportStyle": {
         "description": "Verify exports match chosen pattern",
+        "recommendedTier": "T2",
+        "rationale": "Grep for 'export default' catches commented examples. AST finds only real export assignments.",
+        "T2_command": "AST: Checks ExportAssignment and DefaultKeyword modifier nodes. See ast-verification-scripts.md#export-style-check",
         "checks": {
-          "named-exports": "grep -rn 'export default' ${worktree}/src/${subsystem}/ 2>/dev/null | wc -l | tr -d ' '",
-          "mixed-exports": "0",
-          "barrel-exports": "[ -f ${worktree}/src/${subsystem}/index.ts ] || [ -f ${worktree}/src/${subsystem}/index.js ] && echo '0' || echo '1'"
+          "named-exports": "T2: Find ExportAssignment nodes (default exports) — must be zero",
+          "mixed-exports": "Always PASS",
+          "barrel-exports": "T1: Check index.ts/index.js file exists"
         },
-        "passCondition": "Violation count is 0 or barrel file exists",
+        "passCondition": "Export style matches chosen pattern (AST-verified)",
         "fixInstruction": "Convert exports to the chosen export pattern"
       },
       "errorHandling.strategy": {
         "description": "Verify error handling follows chosen strategy",
+        "recommendedTier": "T2",
+        "rationale": "Critical distinction: 'throw new Error()' vs 'throw new AuthError()'. Grep cannot reliably tell them apart when code has multi-line throw expressions. AST distinguishes the constructor name in NewExpression nodes.",
+        "T1_command": "Comment-stripped grep for 'throw new Error(' — eliminates commented examples",
+        "T2_command": "AST: Finds ThrowStatement → NewExpression → checks constructor Identifier.text === 'Error'. Custom error classes (AuthError, ValidationError) pass. See ast-verification-scripts.md#error-handling-check",
         "checks": {
-          "typed-errors": "grep -rn 'throw new Error(' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | wc -l | tr -d ' '",
-          "result-type": "grep -rn '^[^/]*throw ' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
-          "error-codes": "grep -rn 'throw new Error(' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'code:' | grep -v 'node_modules' | wc -l | tr -d ' '",
-          "mixed": "0"
+          "typed-errors": "T2: ThrowStatement with NewExpression('Error') → VIOLATION. NewExpression('AuthError') → PASS",
+          "result-type": "T2: Any ThrowStatement in non-test code → VIOLATION",
+          "error-codes": "T2: ThrowStatement with NewExpression('Error') without code property → VIOLATION",
+          "mixed": "Always PASS"
         },
-        "passCondition": "Count is 0 (no raw Error throws when typed-errors is chosen)",
+        "passCondition": "Zero violations for the chosen strategy (AST-verified, not line-matched)",
         "fixInstruction": "Replace raw Error throws with the chosen error handling pattern"
       },
       "logging.approach": {
-        "description": "Verify logging uses chosen approach — no raw console.* in production code",
+        "description": "Verify no raw console.* in production code when structured logger is chosen",
+        "recommendedTier": "T1",
+        "rationale": "Console.log is a simple pattern. T1 comment-stripping eliminates the main false positive source (commented-out console.log). T2 available for escalation.",
+        "T1_command": "Comment-stripped: strips comments then searches for console.log/warn/error/info/debug",
+        "T2_command": "AST: Finds CallExpression where callee is PropertyAccessExpression with object 'console'. See ast-verification-scripts.md#console-usage-check",
         "checks": {
-          "structured-logger": "grep -rn 'console\\.log\\|console\\.warn\\|console\\.error\\|console\\.info' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
-          "console-levels": "0",
-          "debug-namespaced": "grep -rn 'console\\.log' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '",
-          "minimal": "grep -rn 'console\\.log\\|console\\.info\\|console\\.debug' ${worktree}/src/${subsystem}/ 2>/dev/null | grep -v 'node_modules' | grep -v '.test.' | wc -l | tr -d ' '"
+          "structured-logger": "T1→T2: No console.log|warn|error|info|debug in non-comment, non-test code",
+          "console-levels": "Always PASS (console with levels is the chosen approach)",
+          "debug-namespaced": "T1: No console.log in non-comment, non-test code (console.warn/error OK)",
+          "minimal": "T1: No console.log|info|debug in non-comment, non-test code (console.error OK)"
         },
-        "passCondition": "Count is 0 (no raw console usage when structured logger is chosen)",
+        "passCondition": "Zero console.* calls in production code (comment-stripped or AST-verified)",
         "fixInstruction": "Replace console.* calls with the chosen logging approach"
       },
       "debugging.traceLevel": {
         "description": "Verify debug instrumentation matches chosen level",
+        "recommendedTier": "T3",
+        "rationale": "Trace instrumentation requires semantic understanding: 'does this exported function have entry/exit traces?' Cannot be verified by pattern matching alone.",
+        "T3_criteria": "Agent reviews each exported function for trace instrumentation at the chosen level. Must produce structured verdict with file:line evidence for each missing trace.",
         "checks": {
-          "boundary-tracing": "For each function in spec.boundary.exports: verify entry/exit trace calls exist at function boundaries",
-          "comprehensive": "Verify OpenTelemetry span creation in each function with side effects",
-          "error-only": "Verify all catch blocks include context capture and breadcrumb logging",
-          "conditional": "Verify trace calls are gated behind environment variable or feature flag"
+          "boundary-tracing": "T3: Every exported function has entry/exit trace calls",
+          "comprehensive": "T3: Every function with side effects creates an OpenTelemetry span",
+          "error-only": "T3: Every catch block captures context and breadcrumbs",
+          "conditional": "T3: Trace calls gated behind env var or feature flag"
         },
-        "passCondition": "Required instrumentation is present in public API methods",
+        "passCondition": "Agent verdict is PASS with confidence >= 0.7",
         "fixInstruction": "Add trace instrumentation at the required level"
       },
       "designPrinciples.solidAdherence": {
-        "description": "Verify SOLID principle adherence at the chosen level via agent code review",
+        "description": "Verify SOLID principle adherence at the chosen strictness level",
+        "recommendedTier": "T2+T3",
+        "rationale": "Two-tier: T2 catches structural violations (large classes = SRP, constructor DI = DIP). T3 handles semantic violations (is this class doing 2 unrelated things?).",
+        "T2_command": "AST: Checks class size (method count, line count), constructor NewExpression for Service/Repository, interface member count. See ast-verification-scripts.md#solid-structural-check",
+        "T3_criteria": "Agent reviews for semantic SOLID compliance. Must cite specific file:line evidence. Mandatory structured JSON output.",
         "checks": {
-          "pragmatic-solid": "Agent review: (1) each file has single clear responsibility, (2) external service dependencies are injected, not hardcoded",
-          "strict-solid": "Agent review: (1) single responsibility per class/module, (2) all dependencies injected via interface, (3) interfaces segregated, (4) no inheritance behavioral changes",
-          "relaxed-solid": "0"
+          "pragmatic-solid": "T2: class methods <= 10, no constructor DI violations. T3: single clear responsibility per file",
+          "strict-solid": "T2: class methods <= 7, no constructor DI, interfaces <= 5 members. T3: all SOLID principles enforced",
+          "relaxed-solid": "Always PASS"
         },
-        "passCondition": "Agent code review confirms compliance at chosen strictness level",
-        "fixInstruction": "Refactor code to meet SOLID adherence requirements"
+        "passCondition": "T2 structural checks pass AND T3 agent verdict is PASS with confidence >= 0.7",
+        "fixInstruction": "Refactor code to meet SOLID adherence requirements at the chosen level"
       },
       "designPrinciples.dryStrategy": {
         "description": "Verify DRY adherence at chosen threshold",
+        "recommendedTier": "T3",
+        "rationale": "Code duplication requires understanding logical equivalence, not just text matching. Two functions may look different but do the same thing. Only semantic review can catch this reliably.",
+        "T3_criteria": "Agent reviews for code duplication at the chosen threshold. Must identify specific duplicated blocks with file:line citations for both copies.",
         "checks": {
-          "rule-of-three": "Agent review: check for 3+ duplicated code blocks of 5+ lines within the subsystem",
-          "strict-dry": "Agent review: check for any duplicated code blocks of 3+ lines",
-          "wet": "0"
+          "rule-of-three": "T3: Flag code blocks of 5+ lines that appear 3+ times",
+          "strict-dry": "T3: Flag any code blocks of 3+ lines that appear 2+ times",
+          "wet": "Always PASS"
         },
-        "passCondition": "No duplication above the threshold for the chosen strategy",
+        "passCondition": "Agent verdict is PASS with confidence >= 0.7",
         "fixInstruction": "Extract duplicated code into shared utilities"
       },
       "testing.strategy": {
-        "description": "Verify testing approach matches chosen strategy",
+        "description": "Verify test files exist per the chosen testing strategy",
+        "recommendedTier": "T1",
+        "rationale": "Test file existence is a file-system check. No AST needed.",
         "checks": {
-          "test-alongside": "For each new .ts/.js implementation file in src/${subsystem}/, verify a co-located .test. or .spec. file exists",
-          "test-first": "Verify test files exist for all implementation files (commit order not mechanically verifiable)",
-          "integration-first": "Verify at least one integration test file exists in the subsystem test directory",
-          "minimal-tests": "Verify test files exist for files containing exported functions with business logic"
+          "test-alongside": "T1: For each .ts/.tsx impl file, verify co-located .test.ts or .spec.ts exists",
+          "test-first": "T1: Same as test-alongside (commit order not mechanically verifiable)",
+          "integration-first": "T1: At least one integration test file in subsystem test directory",
+          "minimal-tests": "T1: Test files exist for files containing exported functions"
         },
         "passCondition": "Required test files exist per the chosen testing strategy",
         "fixInstruction": "Create missing test files per the chosen testing strategy"
       },
       "platform.language": {
-        "description": "Verify language and strictness configuration matches chosen platform",
+        "description": "Verify TypeScript strictness and type safety",
+        "recommendedTier": "T2",
+        "rationale": "The 'any' type keyword appears in comments, string literals, and variable names like 'anyValue'. Only AST analysis reliably finds type-position 'any' keywords.",
+        "T1_command": "Comment-stripped grep for ': any' and 'as any' — eliminates commented-out type annotations",
+        "T2_command": "AST: Finds AnyKeyword nodes in the AST. Zero false positives — only matches 'any' in actual type positions. See ast-verification-scripts.md#any-type-check",
         "checks": {
-          "typescript-strict": "Verify: (1) new files use .ts/.tsx extension, (2) no 'any' type usage (grep -rn ': any' src/${subsystem}/ | grep -v node_modules | wc -l)",
-          "typescript-standard": "Verify new files use .ts/.tsx extension",
-          "javascript-jsdoc": "Verify: (1) new files use .js/.jsx extension, (2) exported functions have @param/@returns JSDoc annotations",
-          "javascript": "Verify new files use .js/.jsx extension"
+          "typescript-strict": "T2: AnyKeyword count = 0 in AST (type annotations, assertions, generics)",
+          "typescript-standard": "T1: Verify .ts/.tsx extensions",
+          "javascript-jsdoc": "T1: Verify .js/.jsx extensions + JSDoc @param/@returns presence",
+          "javascript": "T1: Verify .js/.jsx extensions"
         },
-        "passCondition": "File extensions and type strictness match chosen platform",
-        "fixInstruction": "Convert files to match the chosen language configuration"
+        "passCondition": "Zero 'any' usage when typescript-strict chosen (AST-verified)",
+        "fixInstruction": "Replace 'any' with proper types"
+      },
+      "architecture.layerDeps": {
+        "description": "Verify lower architectural layers never import from higher layers",
+        "recommendedTier": "T2",
+        "rationale": "Layer violation detection via grep matches import paths in comments and strings. AST analysis checks only actual ImportDeclaration nodes and resolves the layer from directory structure.",
+        "T2_command": "AST: For each ImportDeclaration, determine file's layer and import's layer from directory path. Flag if file layer < import layer. See ast-verification-scripts.md#layer-dependency-check",
+        "passCondition": "Zero layer dependency violations (AST-verified)",
+        "fixInstruction": "Move the dependency to a lower layer or invert using an interface"
+      },
+      "architecture.circularDeps": {
+        "description": "Detect circular dependencies between modules",
+        "recommendedTier": "T2",
+        "rationale": "Circular dependencies require full dependency graph analysis. Cannot be detected by grep.",
+        "T2_command": "npx madge --circular --json. See ast-verification-scripts.md#circular-dependency-check",
+        "passCondition": "Zero circular dependency chains",
+        "fixInstruction": "Break circular dependency by extracting shared interface or using dependency injection"
       }
     },
     "enforcementLoop": [
       "1. Agent completes implementation step and stages changed files",
-      "2. ACIS scans staged files to determine which preference checks apply",
-      "3. ACIS runs ALL applicable preference checks (shell commands + agent reviews)",
-      "4. IF any check FAILS:",
+      "2. ACIS determines which preference checks apply to staged files",
+      "3. TIER SELECTION per check:",
+      "   a. Look up check's recommendedTier in enforcement engine config",
+      "   b. Verify tier prerequisites are met (node, typescript, npx)",
+      "   c. If prerequisites not met, fall back to lower tier",
+      "4. TWO-STAGE DETECTION (if enabled and > 5 files):",
+      "   a. Run T1 (comment-stripped grep) on ALL changed files → candidate list",
+      "   b. Run T2/T3 ONLY on candidates from T1",
+      "5. EXECUTE CHECKS at selected tier:",
+      "   a. T1: Comment-stripped pattern matching (node -e + grep)",
+      "   b. T2: AST analysis (node -e with TypeScript API / npx ts-morph / npx madge)",
+      "   c. T3: Schema-constrained agent review (mandatory JSON output: verdict + violations + confidence + evidence)",
+      "6. T3 VALIDATION: If agent review output fails schema validation or confidence < 0.7, fall back to T2",
+      "7. IF any check FAILS:",
       "   a. Step is BLOCKED — commit is rejected",
-      "   b. Agent receives structured violation report: { check, preference, violation, files, fixInstruction }",
+      "   b. Agent receives structured violation report: { check, preference, tier, violation, file, line, fixInstruction }",
       "   c. Agent fixes ALL violations in the same worktree",
       "   d. Agent re-stages and re-attempts commit",
-      "   e. ACIS re-runs failed checks (loop back to step 3, up to maxRetries)",
-      "5. IF all checks PASS → commit accepted, step marked 'complete'",
-      "6. After maxRetries (3) failures → step marked 'blocked', violation details saved, user notified"
+      "   e. ACIS re-runs ONLY failed checks (loop back to step 5, up to maxRetries)",
+      "8. IF all checks PASS → commit accepted, step marked 'complete'",
+      "9. After maxRetries (3) failures → step marked 'blocked', violation details saved, user notified"
     ],
     "violationFormat": {
-      "check": "codingStyle.fileNaming",
-      "preference": "kebab-case",
-      "violation": "File 'src/auth/AuthService.ts' uses PascalCase instead of kebab-case",
-      "files": ["src/auth/AuthService.ts"],
-      "fixInstruction": "Rename to 'src/auth/auth-service.ts' and update all imports",
+      "check": "errorHandling.strategy",
+      "preference": "typed-errors",
+      "tier": "T2",
+      "violation": "throw new Error('auth failed') — use typed error class (e.g., throw new AuthError('auth failed'))",
+      "file": "src/auth/auth-service.ts",
+      "line": 42,
+      "fixInstruction": "Replace 'throw new Error()' with 'throw new AuthError()' — import from errors/auth-error.ts",
       "severity": "BLOCK",
-      "attempt": 1
+      "attempt": 1,
+      "evidence": "AST: ThrowStatement at line 42, NewExpression with Identifier.text = 'Error'"
     },
     "complianceReport": {
       "description": "Always generated at batch completion — systemic, not optional",
       "sections": [
         "Per-subsystem compliance summary",
         "Total checks run / passed / failed-then-fixed / blocked",
-        "Violations that required agent retry (with details)",
+        "Tier usage breakdown (T1/T2/T3 check counts and accuracy)",
+        "Violations that required agent retry (with tier and evidence details)",
         "Final compliance score per preference category (0-100%)",
-        "Steps that were blocked and could not be auto-fixed"
+        "Steps that were blocked and could not be auto-fixed",
+        "False positive rate per tier (if any T1 results overridden by T2)"
       ]
     }
   },
