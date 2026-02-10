@@ -1,0 +1,328 @@
+{
+  "$schema": "../schemas/enforcement-engine.schema.json",
+  "version": "1.0.0",
+  "tiers": {
+    "T1": {
+      "name": "Comment-Stripped Pattern Matching",
+      "speed": "fast",
+      "accuracy": "~90%",
+      "toolchain": ["node -e (comment strip)", "grep", "find", "wc -l"],
+      "commentStripCommand": "node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8'); console.log(s.replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''))\"",
+      "fallsBackTo": "raw-grep-with-warning"
+    },
+    "T2": {
+      "name": "AST Structural Analysis",
+      "speed": "medium",
+      "accuracy": "~99%",
+      "toolchain": ["npx ts-morph", "npx madge", "tsc --noEmit", "node -e (TypeScript API)"],
+      "prerequisites": {
+        "node": true,
+        "npx": true,
+        "tsconfig": true
+      },
+      "fallsBackTo": "T1"
+    },
+    "T3": {
+      "name": "Schema-Constrained Agent Review",
+      "speed": "slow",
+      "accuracy": "semantic",
+      "toolchain": ["Claude agent", "JSON schema validation"],
+      "outputSchema": {
+        "verdict": "PASS | FAIL",
+        "violations": [
+          {
+            "file": "string",
+            "line": "integer",
+            "rule": "string",
+            "description": "string",
+            "severity": "blocking | important | minor",
+            "suggested_fix": "string"
+          }
+        ],
+        "confidence": "0.0-1.0",
+        "evidence": ["string"]
+      },
+      "fallsBackTo": "T2"
+    }
+  },
+  "tierSelection": {
+    "default": "T1",
+    "escalation": {
+      "T1_to_T2_threshold": 5,
+      "T2_to_T3_threshold": 3,
+      "falsePositiveRate": 0.3
+    },
+    "checkTypeDefaults": {
+      "naming": "T1",
+      "imports": "T2",
+      "exports": "T2",
+      "errorHandling": "T2",
+      "logging": "T1",
+      "architecture": "T2",
+      "designPatterns": "T3",
+      "testing": "T1",
+      "typeStrictness": "T2",
+      "debugging": "T3"
+    }
+  },
+  "twoStageDetection": {
+    "enabled": true,
+    "skipT1IfFewFiles": 5,
+    "pattern": "Stage 1: T1 comment-stripped grep on all changed files → candidate list. Stage 2: T2 AST analysis only on candidates. Minimizes expensive AST parsing while maintaining accuracy."
+  },
+  "checks": [
+    {
+      "check_id": "codingStyle.fileNaming",
+      "category": "naming",
+      "preference_key": "codingStyle.fileNaming",
+      "description": "Verify all new/modified source files match the chosen naming convention",
+      "recommended_tier": "T1",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "find ${worktree}/src/${subsystem} -maxdepth 5 -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' | grep -v node_modules | grep -v '.test.' | grep -v '.spec.' | while read f; do basename \"$f\" .ts | basename \"$f\" .tsx | basename \"$f\" .js | basename \"$f\" .jsx; done | grep -E '${violationPattern}' | head -5",
+          "pass_condition": "Output is empty (no naming violations)",
+          "false_positive_notes": "T1 is reliable for naming since filenames cannot be in comments"
+        }
+      },
+      "pass_condition": "Zero files violate naming convention",
+      "fix_instruction": "Rename files to match the chosen naming convention and update all imports"
+    },
+    {
+      "check_id": "codingStyle.importStyle",
+      "category": "imports",
+      "preference_key": "codingStyle.importStyle",
+      "description": "Verify imports use the chosen style (path-aliases, relative, or package-imports)",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "node -e \"const fs=require('fs'),path=require('path'); const f=process.argv[1]; const s=fs.readFileSync(f,'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const bad=s.match(/from\\s+['\\\"]${violationPattern}['\\\"]|require\\(['\\\"]${violationPattern}['\\\"]\\)/g); if(bad)bad.forEach(m=>console.log(f+': '+m))\" ${file}",
+          "pass_condition": "Output is empty (no wrong-style imports found in non-comment code)",
+          "false_positive_notes": "Comment stripping eliminates most false positives but cannot distinguish dynamic imports from string literals"
+        },
+        "T2": {
+          "type": "ast-script",
+          "script_template": "import-style-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let v=0; function visit(n){if(ts.isImportDeclaration(n)){const m=n.moduleSpecifier.text; if(/${violationPattern}/.test(m)){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; console.log(process.argv[1]+':'+ln+': '+m); v++}} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no import violations in actual import declarations)",
+          "false_positive_notes": "AST parsing guarantees only real import declarations are checked, not comments or strings",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Zero imports using the wrong style in actual import declarations",
+      "fix_instruction": "Convert all imports to the chosen import style"
+    },
+    {
+      "check_id": "codingStyle.exportStyle",
+      "category": "exports",
+      "preference_key": "codingStyle.exportStyle",
+      "description": "Verify exports match the chosen pattern (named-only, mixed, barrel)",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const lines=s.split('\\n'); lines.forEach((l,i)=>{if(/^\\s*export\\s+default\\b/.test(l))console.log(process.argv[1]+':'+(i+1)+': export default')})\" ${file}",
+          "pass_condition": "Output is empty (no 'export default' in non-comment code when named-exports chosen)",
+          "false_positive_notes": "Comment stripping handles most cases but cannot distinguish re-exports"
+        },
+        "T2": {
+          "type": "ast-script",
+          "script_template": "export-style-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let v=0; function visit(n){if(ts.isExportAssignment(n)&&!n.isExportEquals){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; console.log(process.argv[1]+':'+ln+': default export'); v++} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no default exports when named-exports chosen)",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Export style matches chosen pattern",
+      "fix_instruction": "Convert exports to the chosen export pattern"
+    },
+    {
+      "check_id": "errorHandling.strategy",
+      "category": "errorHandling",
+      "preference_key": "errorHandling.strategy",
+      "description": "Verify error handling follows the chosen strategy (typed-errors, result-type, error-codes)",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const lines=s.split('\\n'); lines.forEach((l,i)=>{if(/throw\\s+new\\s+Error\\s*\\(/.test(l))console.log(process.argv[1]+':'+(i+1)+': raw Error throw')})\" ${file}",
+          "pass_condition": "Output is empty (no raw 'throw new Error()' in non-comment code)",
+          "false_positive_notes": "Comment stripping prevents matching commented-out error examples. Still may match legitimate error re-throws."
+        },
+        "T2": {
+          "type": "ast-script",
+          "script_template": "error-handling-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let v=0; function visit(n){if(ts.isThrowStatement(n)&&n.expression&&ts.isNewExpression(n.expression)){const cls=n.expression.expression; if(ts.isIdentifier(cls)&&cls.text==='Error'){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; console.log(process.argv[1]+':'+ln+': throw new Error() — use typed error class'); v++}} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no 'throw new Error()' — only typed error classes like throw new AuthError())",
+          "false_positive_notes": "AST analysis confirms only actual throw statements with 'new Error()' are flagged. Custom error subclasses (AuthError, ValidationError) pass correctly.",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Zero raw Error throws when typed-errors chosen; zero throw statements when result-type chosen",
+      "fix_instruction": "Replace raw Error throws with the chosen error handling pattern"
+    },
+    {
+      "check_id": "logging.approach",
+      "category": "logging",
+      "preference_key": "logging.approach",
+      "description": "Verify no raw console.* usage in production code when structured logger is chosen",
+      "recommended_tier": "T1",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const lines=s.split('\\n'); lines.forEach((l,i)=>{if(/\\bconsole\\.(log|warn|error|info|debug)\\b/.test(l))console.log(process.argv[1]+':'+(i+1)+': '+l.trim())})\" ${file}",
+          "pass_condition": "Output is empty (no console.* calls in non-comment, non-test production code)",
+          "false_positive_notes": "Comment stripping eliminates commented-out console.log examples. Test files excluded by caller."
+        },
+        "T2": {
+          "type": "ast-script",
+          "script_template": "console-usage-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let v=0; function visit(n){if(ts.isCallExpression(n)&&ts.isPropertyAccessExpression(n.expression)){const obj=n.expression.expression; const prop=n.expression.name; if(ts.isIdentifier(obj)&&obj.text==='console'&&['log','warn','error','info','debug'].includes(prop.text)){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; console.log(process.argv[1]+':'+ln+': console.'+prop.text+'()'); v++}} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no console.* calls in AST — guaranteed no false positives from comments or strings)",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Zero console.* calls in production code",
+      "fix_instruction": "Replace console.* calls with the chosen logging approach"
+    },
+    {
+      "check_id": "platform.typeStrictness",
+      "category": "typeStrictness",
+      "preference_key": "platform.language",
+      "description": "Verify TypeScript strict mode compliance — no 'any' type usage when typescript-strict is chosen",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "node -e \"const fs=require('fs'); const s=fs.readFileSync(process.argv[1],'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*/g,''); const lines=s.split('\\n'); lines.forEach((l,i)=>{if(/:\\s*any\\b|as\\s+any\\b/.test(l))console.log(process.argv[1]+':'+(i+1)+': '+l.trim())})\" ${file}",
+          "pass_condition": "Output is empty (no ': any' or 'as any' in non-comment code)",
+          "false_positive_notes": "Comment stripping prevents matching '// using any for legacy compat'. May still match 'any' in string literals (rare)."
+        },
+        "T2": {
+          "type": "ast-script",
+          "script_template": "any-type-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let v=0; function visit(n){if(n.kind===ts.SyntaxKind.AnyKeyword){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; const parent=n.parent; let ctx='type annotation'; if(ts.isAsExpression(parent))ctx='as assertion'; if(ts.isTypeReferenceNode(parent))ctx='type reference'; console.log(process.argv[1]+':'+ln+': any ('+ctx+')'); v++} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no 'any' keyword in AST — catches all forms: type annotations, assertions, generics)",
+          "false_positive_notes": "AST parsing finds every use of the 'any' keyword in type positions. Zero false positives from comments or strings.",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Zero 'any' type usage when typescript-strict chosen",
+      "fix_instruction": "Replace 'any' with proper types"
+    },
+    {
+      "check_id": "architecture.layerDeps",
+      "category": "architecture",
+      "preference_key": "codingStyle.codeOrganization",
+      "description": "Verify dependency direction — lower layers never import from higher layers",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T2": {
+          "type": "ast-script",
+          "script_template": "layer-dependency-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const path=require('path'); const layers={foundation:1,core:1,journey:2,service:2,composition:3,ui:3,app:3}; const file=process.argv[1]; const src=fs.readFileSync(file,'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); const fileLayer=Object.keys(layers).find(l=>file.includes('/'+l+'/')); if(!fileLayer)process.exit(0); let v=0; function visit(n){if(ts.isImportDeclaration(n)){const m=n.moduleSpecifier.text; const impLayer=Object.keys(layers).find(l=>m.includes('/'+l+'/')); if(impLayer&&layers[fileLayer]<layers[impLayer]){const ln=sf.getLineAndCharacterOfPosition(n.getStart()).line+1; console.log(file+':'+ln+': Layer '+fileLayer+' imports from '+impLayer+' ('+m+')'); v++}} ts.forEachChild(n,visit)} visit(sf); process.exit(v>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no layer violations — lower layers never import from higher layers)",
+          "false_positive_notes": "AST analysis only checks actual import declarations. Layer names must be in the directory path.",
+          "prerequisites": ["node", "typescript"]
+        }
+      },
+      "pass_condition": "Zero layer dependency violations",
+      "fix_instruction": "Move the dependency to a lower layer or invert the dependency using an interface"
+    },
+    {
+      "check_id": "architecture.circularDeps",
+      "category": "architecture",
+      "preference_key": "codingStyle.codeOrganization",
+      "description": "Detect circular dependencies between modules",
+      "recommended_tier": "T2",
+      "tiers": {
+        "T2": {
+          "type": "ast-script",
+          "script_template": "circular-dependency-check",
+          "command": "npx -y madge@latest --circular --json ${worktree}/src/${subsystem}/ 2>/dev/null | node -e \"const d=require('fs').readFileSync('/dev/stdin','utf8'); const c=JSON.parse(d||'[]'); if(c.length>0){c.forEach(cycle=>console.log('Circular: '+cycle.join(' → '))); process.exit(1)}\"",
+          "pass_condition": "Exit code 0 (no circular dependencies detected)",
+          "prerequisites": ["node", "npx"]
+        }
+      },
+      "pass_condition": "Zero circular dependency chains",
+      "fix_instruction": "Break the circular dependency by extracting a shared interface or using dependency injection"
+    },
+    {
+      "check_id": "designPrinciples.solidAdherence",
+      "category": "designPatterns",
+      "preference_key": "designPrinciples.solidAdherence",
+      "description": "Verify SOLID principle adherence at the chosen strictness level",
+      "recommended_tier": "T3",
+      "tiers": {
+        "T2": {
+          "type": "ast-script",
+          "script_template": "solid-structural-check",
+          "command": "node -e \"const ts=require('typescript'); const fs=require('fs'); const src=fs.readFileSync(process.argv[1],'utf8'); const sf=ts.createSourceFile('f.ts',src,ts.ScriptTarget.Latest,true); let classCount=0,methodsPerClass=[],newInConstructor=0; function visit(n){if(ts.isClassDeclaration(n)){classCount++; let methods=0; n.members.forEach(m=>{if(ts.isMethodDeclaration(m))methods++}); methodsPerClass.push(methods)} if(ts.isConstructorDeclaration(n)){n.body&&n.body.statements.forEach(s=>{function findNew(nn){if(ts.isNewExpression(nn)){const cls=nn.expression; if(ts.isIdentifier(cls)&&(cls.text.endsWith('Service')||cls.text.endsWith('Repository'))){const ln=sf.getLineAndCharacterOfPosition(nn.getStart()).line+1; console.log(process.argv[1]+':'+ln+': Direct instantiation of '+cls.text+' in constructor (DIP violation)'); newInConstructor++}} ts.forEachChild(nn,findNew)} findNew(s)})} ts.forEachChild(n,visit)} visit(sf); methodsPerClass.forEach((m,i)=>{if(m>10)console.log(process.argv[1]+': Class '+(i+1)+' has '+m+' methods (possible SRP violation)')}); process.exit(newInConstructor>0?1:0)\" ${file}",
+          "pass_condition": "Exit code 0 (no constructor-level DI violations, no classes with >10 methods)",
+          "false_positive_notes": "Structural check catches obvious violations (constructor DI, class size) but cannot judge semantic responsibility",
+          "prerequisites": ["node", "typescript"]
+        },
+        "T3": {
+          "type": "agent-review",
+          "criteria": "Review the following code for SOLID compliance at the '${preference_value}' level. You MUST output a JSON object with this exact structure: { \"verdict\": \"PASS\" or \"FAIL\", \"violations\": [{ \"file\": \"path\", \"line\": number, \"rule\": \"SRP|OCP|LSP|ISP|DIP\", \"description\": \"what is wrong\", \"severity\": \"blocking|important|minor\", \"suggested_fix\": \"how to fix\" }], \"confidence\": 0.0-1.0, \"evidence\": [\"specific code citations\"] }. For pragmatic-solid: flag only clear SRP violations (class doing 2+ unrelated things) and missing DI for external services. For strict-solid: flag all SOLID violations including missing interfaces, inheritance misuse, and non-segregated interfaces.",
+          "output_schema": "enforcement-engine.schema.json#/definitions/tieredCheck/properties/tiers/properties/T3/properties/outputSchema",
+          "pass_condition": "verdict is PASS with confidence >= 0.7"
+        }
+      },
+      "pass_condition": "SOLID adherence at chosen strictness level",
+      "fix_instruction": "Refactor code to meet SOLID adherence requirements at the chosen level"
+    },
+    {
+      "check_id": "designPrinciples.dryStrategy",
+      "category": "designPatterns",
+      "preference_key": "designPrinciples.dryStrategy",
+      "description": "Verify DRY adherence at the chosen threshold",
+      "recommended_tier": "T3",
+      "tiers": {
+        "T3": {
+          "type": "agent-review",
+          "criteria": "Review the following code files for code duplication at the '${preference_value}' level. You MUST output a JSON object with this exact structure: { \"verdict\": \"PASS\" or \"FAIL\", \"violations\": [{ \"file\": \"path\", \"line\": number, \"rule\": \"DRY\", \"description\": \"what is duplicated and where\", \"severity\": \"blocking|important|minor\", \"suggested_fix\": \"extraction target\" }], \"confidence\": 0.0-1.0, \"evidence\": [\"code block A at file:line matches code block B at file:line\"] }. For rule-of-three: flag only code blocks of 5+ lines that appear 3+ times. For strict-dry: flag any code blocks of 3+ lines that appear 2+ times. For wet: always PASS.",
+          "output_schema": "enforcement-engine.schema.json#/definitions/tieredCheck/properties/tiers/properties/T3/properties/outputSchema",
+          "pass_condition": "verdict is PASS with confidence >= 0.7"
+        }
+      },
+      "pass_condition": "No duplication above threshold for the chosen strategy",
+      "fix_instruction": "Extract duplicated code into shared utilities"
+    },
+    {
+      "check_id": "debugging.traceLevel",
+      "category": "debugging",
+      "preference_key": "debugging.traceLevel",
+      "description": "Verify debug instrumentation matches the chosen trace level",
+      "recommended_tier": "T3",
+      "tiers": {
+        "T3": {
+          "type": "agent-review",
+          "criteria": "Review the following code for debug instrumentation at the '${preference_value}' level. You MUST output a JSON object with this exact structure: { \"verdict\": \"PASS\" or \"FAIL\", \"violations\": [{ \"file\": \"path\", \"line\": number, \"rule\": \"TRACE_MISSING|TRACE_INSUFFICIENT\", \"description\": \"which function/boundary is missing tracing\", \"severity\": \"blocking|important|minor\", \"suggested_fix\": \"add trace call at function entry/exit\" }], \"confidence\": 0.0-1.0, \"evidence\": [\"function X at file:line has no entry trace\"] }. For boundary-tracing: every exported public function must have entry/exit trace calls. For comprehensive: every function with side effects must create an OpenTelemetry span. For error-only: every catch block must capture context. For conditional: trace calls must be gated behind env var or feature flag.",
+          "output_schema": "enforcement-engine.schema.json#/definitions/tieredCheck/properties/tiers/properties/T3/properties/outputSchema",
+          "pass_condition": "verdict is PASS with confidence >= 0.7"
+        }
+      },
+      "pass_condition": "Required instrumentation is present at the chosen level",
+      "fix_instruction": "Add trace instrumentation at the required level"
+    },
+    {
+      "check_id": "testing.strategy",
+      "category": "testing",
+      "preference_key": "testing.strategy",
+      "description": "Verify test files exist per the chosen testing strategy",
+      "recommended_tier": "T1",
+      "tiers": {
+        "T1": {
+          "type": "shell",
+          "command": "for f in $(find ${worktree}/src/${subsystem} -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.test.' | grep -v '.spec.' | grep -v '__tests__' | grep -v 'index.ts' | grep -v '.d.ts'); do base=$(echo \"$f\" | sed 's/\\.tsx\\{0,1\\}$//'); if [ ! -f \"${base}.test.ts\" ] && [ ! -f \"${base}.test.tsx\" ] && [ ! -f \"${base}.spec.ts\" ] && [ ! -f \"${base}.spec.tsx\" ] && [ ! -f \"$(dirname $f)/__tests__/$(basename ${base}).test.ts\" ]; then echo \"Missing test: $f\"; fi; done",
+          "pass_condition": "Output is empty (every implementation file has a corresponding test file)",
+          "false_positive_notes": "File existence check is reliable. May flag trivial files (types-only, constants) — agent can skip those."
+        }
+      },
+      "pass_condition": "Required test files exist per the chosen testing strategy",
+      "fix_instruction": "Create missing test files per the chosen testing strategy"
+    }
+  ]
+}

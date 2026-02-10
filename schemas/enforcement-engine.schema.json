@@ -1,0 +1,299 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "enforcement-engine.schema.json",
+  "title": "ACIS Three-Tier Enforcement Engine",
+  "description": "Schema for the tiered verification engine that upgrades governance from line-level grep/find to structural AST analysis and schema-constrained agent review. T1 (comment-stripped pattern matching) → T2 (AST/compiler analysis) → T3 (schema-constrained agent review).",
+  "type": "object",
+  "required": ["version", "tiers", "checks"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "tiers": {
+      "type": "object",
+      "description": "Verification tier definitions. Higher tiers are more accurate but slower.",
+      "required": ["T1", "T2", "T3"],
+      "properties": {
+        "T1": {
+          "type": "object",
+          "description": "Comment-stripped pattern matching. Upgrades raw grep by stripping comments first. Fast (~1s), ~90% accuracy.",
+          "properties": {
+            "name": { "type": "string", "const": "Comment-Stripped Pattern Matching" },
+            "speed": { "type": "string", "const": "fast" },
+            "accuracy": { "type": "string", "const": "~90%" },
+            "toolchain": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Tools used: node -e for comment stripping, grep, find, wc"
+            },
+            "commentStripCommand": {
+              "type": "string",
+              "description": "Default command to strip comments from a file before pattern matching"
+            },
+            "fallsBackTo": {
+              "type": "string",
+              "description": "If comment stripping fails (no node), fall back to raw grep with false-positive warning"
+            }
+          }
+        },
+        "T2": {
+          "type": "object",
+          "description": "AST/compiler structural analysis. Uses ts-morph, madge, tsc for code structure understanding. Medium speed (~5s), ~99% accuracy.",
+          "properties": {
+            "name": { "type": "string", "const": "AST Structural Analysis" },
+            "speed": { "type": "string", "const": "medium" },
+            "accuracy": { "type": "string", "const": "~99%" },
+            "toolchain": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Tools used: npx ts-morph, npx madge, tsc --noEmit, node -e with TypeScript API"
+            },
+            "prerequisites": {
+              "type": "object",
+              "description": "What must be present for T2 checks to run",
+              "properties": {
+                "node": { "type": "boolean", "const": true, "description": "Node.js must be available" },
+                "npx": { "type": "boolean", "const": true, "description": "npx must be available" },
+                "tsconfig": { "type": "boolean", "description": "tsconfig.json must exist (for TypeScript checks)" }
+              }
+            },
+            "fallsBackTo": {
+              "type": "string",
+              "const": "T1",
+              "description": "If T2 prerequisites not met, falls back to T1"
+            }
+          }
+        },
+        "T3": {
+          "type": "object",
+          "description": "Schema-constrained agent review. Uses Claude agents with mandatory JSON output schema. Semantic understanding of code intent. Slow (~15s), handles design pattern verification.",
+          "properties": {
+            "name": { "type": "string", "const": "Schema-Constrained Agent Review" },
+            "speed": { "type": "string", "const": "slow" },
+            "accuracy": { "type": "string", "const": "semantic" },
+            "toolchain": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Tools used: Claude agent with structured output, JSON schema validation"
+            },
+            "outputSchema": {
+              "type": "object",
+              "description": "Mandatory output schema for agent reviews — enforces deterministic verdicts",
+              "required": ["verdict", "violations", "confidence"],
+              "properties": {
+                "verdict": {
+                  "type": "string",
+                  "enum": ["PASS", "FAIL"],
+                  "description": "Binary verdict — no ambiguity"
+                },
+                "violations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["file", "line", "rule", "description", "severity"],
+                    "properties": {
+                      "file": { "type": "string", "description": "File path where violation found" },
+                      "line": { "type": "integer", "description": "Line number" },
+                      "rule": { "type": "string", "description": "Rule ID that was violated" },
+                      "description": { "type": "string", "description": "What the violation is" },
+                      "severity": { "type": "string", "enum": ["blocking", "important", "minor"] },
+                      "suggested_fix": { "type": "string", "description": "Concrete fix suggestion" }
+                    }
+                  }
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Confidence in verdict (0-1). Below 0.7 triggers T2 cross-check."
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Specific code citations supporting the verdict"
+                }
+              }
+            },
+            "fallsBackTo": {
+              "type": "string",
+              "const": "T2",
+              "description": "If agent review times out or produces invalid output, falls back to T2"
+            }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "All governance checks with their tier assignments and commands per tier",
+      "items": {
+        "$ref": "#/definitions/tieredCheck"
+      }
+    },
+    "tierSelection": {
+      "type": "object",
+      "description": "Rules for selecting which tier to use per check",
+      "properties": {
+        "default": {
+          "type": "string",
+          "enum": ["T1", "T2", "T3"],
+          "default": "T1",
+          "description": "Default tier if no specific rule matches"
+        },
+        "escalation": {
+          "type": "object",
+          "description": "When to automatically escalate to a higher tier",
+          "properties": {
+            "T1_to_T2_threshold": {
+              "type": "integer",
+              "default": 5,
+              "description": "If T1 finds more than this many potential violations, escalate to T2 for confirmation"
+            },
+            "T2_to_T3_threshold": {
+              "type": "integer",
+              "default": 3,
+              "description": "If T2 finds more than this many violations in design/architecture checks, escalate to T3"
+            },
+            "falsePositiveRate": {
+              "type": "number",
+              "default": 0.3,
+              "description": "If historical false positive rate exceeds this, auto-escalate to next tier"
+            }
+          }
+        },
+        "checkTypeDefaults": {
+          "type": "object",
+          "description": "Default tier by check category",
+          "properties": {
+            "naming": { "type": "string", "default": "T1", "description": "File/variable naming → T1 (fast, reliable)" },
+            "imports": { "type": "string", "default": "T2", "description": "Import analysis → T2 (needs AST for accuracy)" },
+            "exports": { "type": "string", "default": "T2", "description": "Export analysis → T2 (needs AST)" },
+            "errorHandling": { "type": "string", "default": "T2", "description": "Error patterns → T2 (comment-stripped grep misses context)" },
+            "logging": { "type": "string", "default": "T1", "description": "Console usage → T1 (simple pattern, comment-strip sufficient)" },
+            "architecture": { "type": "string", "default": "T2", "description": "Layer violations → T2 (needs import graph)" },
+            "designPatterns": { "type": "string", "default": "T3", "description": "SOLID/DRY → T3 (requires semantic understanding)" },
+            "testing": { "type": "string", "default": "T1", "description": "Test file existence → T1 (file existence checks)" },
+            "typeStrictness": { "type": "string", "default": "T2", "description": "Type safety → T2 (needs tsc or ts-morph)" }
+          }
+        }
+      }
+    },
+    "twoStageDetection": {
+      "type": "object",
+      "description": "Two-stage detection pattern: T1 filters candidates, T2 confirms. Optimizes performance.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use T1 as fast filter before T2 AST verification"
+        },
+        "skipT1IfFewFiles": {
+          "type": "integer",
+          "default": 5,
+          "description": "If fewer than this many files changed, skip T1 and go directly to T2"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Stage 1: T1 fast-filter on all files → Stage 2: T2 AST-verify only on candidates from Stage 1"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "tieredCheck": {
+      "type": "object",
+      "required": ["check_id", "category", "preference_key", "description", "tiers"],
+      "properties": {
+        "check_id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9._-]+$",
+          "description": "Unique identifier for this check"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["naming", "imports", "exports", "errorHandling", "logging", "architecture", "designPatterns", "testing", "typeStrictness", "debugging"],
+          "description": "Check category — determines default tier"
+        },
+        "preference_key": {
+          "type": "string",
+          "description": "Dot-path to the preference this check enforces (e.g., codingStyle.fileNaming)"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Human-readable description of what this check verifies"
+        },
+        "tiers": {
+          "type": "object",
+          "description": "Verification commands per tier. Each tier provides increasingly accurate verification.",
+          "properties": {
+            "T1": {
+              "$ref": "#/definitions/tierCommand"
+            },
+            "T2": {
+              "$ref": "#/definitions/tierCommand"
+            },
+            "T3": {
+              "$ref": "#/definitions/tierCommand"
+            }
+          },
+          "minProperties": 1
+        },
+        "recommended_tier": {
+          "type": "string",
+          "enum": ["T1", "T2", "T3"],
+          "description": "The tier that provides the best accuracy/speed tradeoff for this check"
+        },
+        "pass_condition": {
+          "type": "string",
+          "description": "What constitutes a passing result across all tiers"
+        },
+        "fix_instruction": {
+          "type": "string",
+          "description": "Instruction given to agent when check fails"
+        }
+      }
+    },
+    "tierCommand": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["shell", "ast-script", "agent-review"],
+          "description": "Command type: shell (grep/find), ast-script (node -e / npx ts-morph), agent-review (structured LLM review)"
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command or script to execute. For ast-script, this is a node -e or npx command."
+        },
+        "script_template": {
+          "type": "string",
+          "description": "Reference to a script template in templates/ast-verification-scripts.md"
+        },
+        "criteria": {
+          "type": "string",
+          "description": "For agent-review type: structured review criteria"
+        },
+        "output_schema": {
+          "type": "string",
+          "description": "For agent-review type: JSON schema reference for mandatory structured output"
+        },
+        "pass_condition": {
+          "type": "string",
+          "description": "What result means PASS for this tier"
+        },
+        "false_positive_notes": {
+          "type": "string",
+          "description": "Known false positive patterns and their handling"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What must be available for this tier command to work (e.g., 'node', 'npx', 'tsconfig.json')"
+        }
+      }
+    }
+  }
+}

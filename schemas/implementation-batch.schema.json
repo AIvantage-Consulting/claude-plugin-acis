@@ -312,10 +312,10 @@
     },
     "enforcement_ruleset": {
       "type": "array",
-      "description": "Concrete verification checks derived from implementation_preferences. Built during Phase 0.1 and executed after every step in Phase 2.",
+      "description": "Tiered verification checks derived from implementation_preferences and enforcement engine. Built during Phase 0.1 and executed after every step in Phase 2 using the Three-Tier Enforcement Engine.",
       "items": {
         "type": "object",
-        "required": ["check_id", "preference_key", "preference_value", "type", "pass_condition"],
+        "required": ["check_id", "preference_key", "preference_value", "tier", "pass_condition"],
         "properties": {
           "check_id": {
             "type": "string",
@@ -329,33 +329,51 @@
             "type": "string",
             "description": "User's chosen value (e.g., kebab-case)"
           },
+          "tier": {
+            "type": "string",
+            "enum": ["T1", "T2", "T3"],
+            "description": "Verification tier: T1 (comment-stripped grep), T2 (AST analysis), T3 (schema-constrained agent review)"
+          },
           "type": {
             "type": "string",
-            "enum": ["shell", "agent-review"],
-            "description": "Whether this check runs a shell command or requires agent self-review"
+            "enum": ["shell", "ast-script", "agent-review"],
+            "description": "Command type: shell (T1), ast-script (T2), agent-review (T3)"
           },
           "command": {
             "type": "string",
-            "description": "Shell command to run (Bash 3.2 compatible). Only for type=shell."
+            "description": "Shell/AST command to run. For T1: comment-stripped grep. For T2: node -e with TypeScript API."
           },
           "criteria": {
             "type": "string",
-            "description": "Review criteria description. Only for type=agent-review."
+            "description": "Structured review criteria. Only for type=agent-review (T3). Agent must produce JSON output matching enforcement-engine schema."
+          },
+          "output_schema": {
+            "type": "string",
+            "description": "JSON schema reference for agent review output validation. Only for T3."
           },
           "pass_condition": {
             "type": "string",
-            "description": "What constitutes a passing result (e.g., 'output is empty', 'count is 0')"
+            "description": "What constitutes a passing result"
           },
           "fix_instruction": {
             "type": "string",
             "description": "Instruction given to agent when check fails"
+          },
+          "fallback_tier": {
+            "type": "string",
+            "enum": ["T1", "T2"],
+            "description": "Tier to fall back to if primary tier is unavailable"
+          },
+          "fallback_command": {
+            "type": "string",
+            "description": "Command for fallback tier"
           }
         }
       }
     },
     "compliance": {
       "type": "object",
-      "description": "Compliance tracking — records how well preferences were followed across all steps",
+      "description": "Compliance tracking — records how well preferences were followed across all steps, including tier-level statistics",
       "properties": {
         "total_checks_run": { "type": "integer", "default": 0 },
         "total_checks_passed": { "type": "integer", "default": 0 },
@@ -373,12 +391,64 @@
           "type": "number",
           "description": "Overall compliance percentage (0-100)"
         },
+        "tier_statistics": {
+          "type": "object",
+          "description": "Breakdown of checks by verification tier",
+          "properties": {
+            "T1": {
+              "type": "object",
+              "properties": {
+                "checks_run": { "type": "integer", "default": 0 },
+                "checks_passed": { "type": "integer", "default": 0 },
+                "false_positives_overridden": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "T1 results overridden by T2/T3 (indicating T1 false positive)"
+                }
+              }
+            },
+            "T2": {
+              "type": "object",
+              "properties": {
+                "checks_run": { "type": "integer", "default": 0 },
+                "checks_passed": { "type": "integer", "default": 0 },
+                "fallbacks_from_T3": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "Times T2 was used because T3 confidence was too low"
+                }
+              }
+            },
+            "T3": {
+              "type": "object",
+              "properties": {
+                "checks_run": { "type": "integer", "default": 0 },
+                "checks_passed": { "type": "integer", "default": 0 },
+                "average_confidence": {
+                  "type": "number",
+                  "description": "Average confidence score across all T3 reviews"
+                },
+                "low_confidence_fallbacks": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "Times T3 fell back to T2 due to confidence < 0.7"
+                },
+                "schema_validation_failures": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "Times T3 output failed JSON schema validation"
+                }
+              }
+            }
+          }
+        },
         "per_preference": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "preference": { "type": "string" },
+              "tier": { "type": "string", "enum": ["T1", "T2", "T3"] },
               "checks_run": { "type": "integer" },
               "passed": { "type": "integer" },
               "fixed": { "type": "integer" },
@@ -400,7 +470,11 @@
                   "properties": {
                     "check": { "type": "string" },
                     "preference": { "type": "string" },
+                    "tier": { "type": "string", "enum": ["T1", "T2", "T3"] },
                     "violation": { "type": "string" },
+                    "file": { "type": "string" },
+                    "line": { "type": "integer" },
+                    "evidence": { "type": "string" },
                     "files": { "type": "array", "items": { "type": "string" } },
                     "attempts": { "type": "integer" }
                   }
