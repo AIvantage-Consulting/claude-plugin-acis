@@ -23,6 +23,7 @@ User invokes `/acis init` command with optional flags:
             │  STEP 0: Dependency Check       │
             │  - Check ralph-wiggum plugin    │
             │  - Check Codex MCP server       │
+            │  - Check Agent Teams flag       │
             │  - Offer installation options   │
             │  - Record plugin availability   │
             └─────────────────────────────────┘
@@ -106,7 +107,26 @@ grep -l "codex" ~/.claude/settings*.json 2>/dev/null
 
 **Also check if `mcp__codex__codex` tool is available** in the current session's tool list.
 
-### 0.3 Present Dependency Status
+### 0.3 Check Agent Teams (TeammateTool)
+
+**Detection method:**
+```bash
+# Check if CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is set in user settings
+grep -l "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" ~/.claude/settings.json 2>/dev/null
+```
+
+**Also check at runtime** if TeamCreate/SendMessage/TeamDelete tools are available in the current session's tool list. The feature flag must be set in `~/.claude/settings.json`:
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+**Requires:** Claude Code v2.1.19+ (v2.1.32+ recommended for stability).
+
+### 0.4 Present Dependency Status
 
 Show the user what's installed and what's missing:
 
@@ -117,11 +137,12 @@ Show the user what's installed and what's missing:
 ║                                                                   ║
 ║  ralph-wiggum plugin:  [✓ Installed] or [✗ Not found]            ║
 ║  Codex MCP server:     [✓ Configured] or [✗ Not configured]      ║
+║  Agent Teams:          [✓ Enabled] or [✗ Not enabled]            ║
 ║                                                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
-### 0.4 Handle Missing Dependencies
+### 0.5 Handle Missing Dependencies
 
 For EACH missing dependency, use AskUserQuestion to prompt:
 
@@ -219,7 +240,59 @@ For EACH missing dependency, use AskUserQuestion to prompt:
 - Set `pluginDefaults.skipCodex = true` in config
 - Note: "--skip-codex will be applied by default to all commands"
 
-### 0.5 Record Plugin State
+#### If Agent Teams is not enabled:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  Agent Teams (TeammateTool) Not Enabled                            ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  This provides:                                                   ║
+║    • Persistent agent teams with inbox-based messaging            ║
+║    • Shared task lists with dependency auto-unblock               ║
+║    • Fine-grained parallel execution (spec-level, not group)      ║
+║    • Graceful shutdown and cleanup of worker agents               ║
+║                                                                   ║
+║  WITHOUT IT, you will lose:                                       ║
+║    ✗ /acis:implement-parallel uses coarse group-level batching    ║
+║    ✗ /acis:remediate-parallel --swarm mode unavailable            ║
+║    ✗ No inter-agent communication during parallel execution       ║
+║    ✗ No automatic task dependency unblocking                      ║
+║                                                                   ║
+║  NOTE: ACIS still works with Task tool fallback for parallelism.  ║
+║  Most features remain functional, just without team coordination. ║
+║                                                                   ║
+║  REQUIRES:                                                        ║
+║    • Claude Code v2.1.19+ (v2.1.32+ recommended)                 ║
+║    • CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in user settings      ║
+║                                                                   ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+**Options (via AskUserQuestion):**
+1. **Enable Agent Teams (Recommended)** - "Add the feature flag to my settings"
+2. **Continue without it** - "Use Task tool fallback for parallel execution"
+3. **I'll enable it myself later** - "Skip and remind me in config"
+
+**If user chooses to enable:**
+- Show enablement instructions:
+  ```
+  To enable Agent Teams:
+  1. Add to ~/.claude/settings.json under "env":
+     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  2. Restart Claude Code
+
+  Or run: claude config set env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 1
+
+  After enabling, re-run /acis init
+  ```
+- Note: If the agent has Write access to ~/.claude/settings.json, offer to set it automatically
+
+**If user chooses to continue without:**
+- Set `pluginDefaults.skipAgentTeams = true` in config
+- Note: "Parallel execution will use Task tool fallback (no team coordination)"
+
+### 0.6 Record Plugin State
 
 Store the dependency check results for later reference:
 
@@ -234,11 +307,17 @@ Store the dependency check results for later reference:
     "installed": true|false,
     "checkedAt": "{ISO timestamp}",
     "userChoice": "configured|skipped|deferred"
+  },
+  "agentTeams": {
+    "installed": true|false,
+    "checkedAt": "{ISO timestamp}",
+    "userChoice": "enabled|skipped|deferred",
+    "claudeCodeVersion": "{detected version or unknown}"
   }
 }
 ```
 
-### 0.6 Summary Before Proceeding
+### 0.7 Summary Before Proceeding
 
 Always show summary of plugin configuration:
 
@@ -250,16 +329,20 @@ Always show summary of plugin configuration:
 ║  Plugin Status:                                                   ║
 ║    • ralph-wiggum: [Installed ✓] or [Skipped ✗]                  ║
 ║    • Codex MCP:    [Configured ✓] or [Skipped ✗]                 ║
+║    • Agent Teams:  [Enabled ✓] or [Skipped ✗]                    ║
 ║                                                                   ║
 ║  Default Behavior:                                                ║
 ║    {If ralph-wiggum installed: "Ralph-loop enabled (--skip-ralph-loop to disable)"}
 ║    {If ralph-wiggum skipped:   "Ralph-loop disabled (--use-ralph-loop to enable)"}
 ║    {If Codex configured:       "Codex enabled (--skip-codex to disable)"}
 ║    {If Codex skipped:          "Codex disabled (--use-codex to enable)"}
+║    {If Agent Teams enabled:    "Team orchestration enabled (--skip-swarm to disable)"}
+║    {If Agent Teams skipped:    "Task fallback mode (--use-swarm to enable)"}
 ║                                                                   ║
 ║  Config defaults set:                                             ║
 ║    pluginDefaults.skipCodex: {false if installed, true if skipped}
 ║    pluginDefaults.skipRalphLoop: {false if installed, true if skipped}
+║    pluginDefaults.skipAgentTeams: {false if enabled, true if skipped}
 ║                                                                   ║
 ║  You can change these later in .acis-config.json                  ║
 ║                                                                   ║
@@ -414,6 +497,7 @@ Generate `.acis-config.json` in project root:
   "pluginDefaults": {
     "skipCodex": false,
     "skipRalphLoop": false,
+    "skipAgentTeams": false,
     "useInternalAgentsOnly": false
   },
   "installedPlugins": {
@@ -426,6 +510,12 @@ Generate `.acis-config.json` in project root:
       "installed": true,
       "checkedAt": "{ISO timestamp}",
       "userChoice": "configured"
+    },
+    "agentTeams": {
+      "installed": true,
+      "checkedAt": "{ISO timestamp}",
+      "userChoice": "enabled",
+      "claudeCodeVersion": "2.1.32+"
     }
   },
   "generatedFrom": "interview | docs",
@@ -437,12 +527,14 @@ Generate `.acis-config.json` in project root:
 
 The values above show the "all plugins installed" case. Adjust based on Step 0 results:
 
-| Plugin State | skipCodex | skipRalphLoop | Available Override |
-|--------------|-----------|---------------|-------------------|
-| Codex installed | `false` | - | `--skip-codex` to disable |
-| Codex skipped | `true` | - | `--use-codex` to enable |
-| ralph-wiggum installed | - | `false` | `--skip-ralph-loop` to disable |
-| ralph-wiggum skipped | - | `true` | `--use-ralph-loop` to enable |
+| Plugin State | skipCodex | skipRalphLoop | skipAgentTeams | Available Override |
+|--------------|-----------|---------------|----------------|-------------------|
+| Codex installed | `false` | - | - | `--skip-codex` to disable |
+| Codex skipped | `true` | - | - | `--use-codex` to enable |
+| ralph-wiggum installed | - | `false` | - | `--skip-ralph-loop` to disable |
+| ralph-wiggum skipped | - | `true` | - | `--use-ralph-loop` to enable |
+| Agent Teams enabled | - | - | `false` | `--skip-swarm` to disable |
+| Agent Teams skipped | - | - | `true` | `--use-swarm` to enable |
 
 **Principle**: Defaults match availability. Override flags go the opposite direction.
 
@@ -450,12 +542,12 @@ The values above show the "all plugins installed" case. Adjust based on Step 0 r
 
 All plugins installed:
 ```json
-"pluginDefaults": { "skipCodex": false, "skipRalphLoop": false }
+"pluginDefaults": { "skipCodex": false, "skipRalphLoop": false, "skipAgentTeams": false }
 ```
 
 No plugins installed:
 ```json
-"pluginDefaults": { "skipCodex": true, "skipRalphLoop": true, "useInternalAgentsOnly": true }
+"pluginDefaults": { "skipCodex": true, "skipRalphLoop": true, "skipAgentTeams": true, "useInternalAgentsOnly": true }
 ```
 
 ## Step 7: Install ACIS Hooks

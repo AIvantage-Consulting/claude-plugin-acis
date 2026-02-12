@@ -32,7 +32,7 @@ You are executing the ACIS help system. This command dynamically discovers and d
    Output in this format:
    ```
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  ACIS v2.10.0 - Automated Code Improvement System                           ║
+   ║  ACIS v2.11.0 - Automated Code Improvement System                           ║
    ║  https://github.com/aivantage-consulting/claude-plugin-acis                 ║
    ╠══════════════════════════════════════════════════════════════════════════════╣
    ║                                                                              ║
@@ -311,7 +311,23 @@ Also check and report:
    ```bash
    # Check for Codex MCP
    # Check for ralph-wiggum plugin
+   # Check for Agent Teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)
    # Report availability
+   ```
+
+   Report in this format:
+   ```
+   Optional Dependencies:
+     • ralph-wiggum: [✓ Installed] or [✗ Not found]
+     • Codex MCP:    [✓ Configured] or [✗ Not configured]
+     • Agent Teams:  [✓ Enabled] or [✗ Not enabled]
+   ```
+
+   **Agent Teams detection:**
+   ```bash
+   # Check env var in settings
+   grep -q "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" ~/.claude/settings.json 2>/dev/null
+   # Also check if TeamCreate tool is available in session
    ```
 
 ## Output Format Guidelines

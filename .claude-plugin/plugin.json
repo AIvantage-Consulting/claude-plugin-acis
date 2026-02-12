@@ -1,7 +1,7 @@
 {
   "name": "acis",
-  "version": "2.10.0",
-  "description": "Automated Code Improvement System - Three-Tier Enforcement Engine (AST + Agent Review), GENESIS vision-to-architecture framework, Parallel Implementation from GENESIS specs, Implementation Preferences with systemic enforcement, Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Pre-Commit Review, User Feedback, Recommendation Routing, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
+  "version": "2.11.0",
+  "description": "Automated Code Improvement System - Agent Teams integration (TeammateTool), Three-Tier Enforcement Engine (AST + Agent Review), GENESIS vision-to-architecture framework, Parallel Implementation from GENESIS specs, Implementation Preferences with systemic enforcement, Project bootstrapping, Decision-oriented discovery, Dual-CEO validation, Behavioral TDD, Quality Gate, Pre-Commit Review, User Feedback, Recommendation Routing, Parallel Remediation, Swarm Orchestration, Observability Traces, and Consensus verification",
   "author": {
     "name": "AIvantage Consulting Inc",
     "url": "https://aivantage-consulting.com"
