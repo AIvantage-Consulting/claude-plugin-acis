@@ -333,6 +333,11 @@
           "description": "Skip ralph-loop (ralph-wiggum plugin not available)",
           "default": false
         },
+        "skipAgentTeams": {
+          "type": "boolean",
+          "description": "Skip Agent Teams / TeammateTool (feature flag not enabled or Claude Code < v2.1.19)",
+          "default": false
+        },
         "useInternalAgentsOnly": {
           "type": "boolean",
           "description": "Use only internal Claude agents for all operations",
@@ -356,6 +361,18 @@
           "properties": {
             "installed": { "type": "boolean" },
             "checkedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "agentTeams": {
+          "type": "object",
+          "description": "Agent Teams (TeammateTool) availability — requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and Claude Code v2.1.19+",
+          "properties": {
+            "installed": { "type": "boolean" },
+            "checkedAt": { "type": "string", "format": "date-time" },
+            "claudeCodeVersion": {
+              "type": "string",
+              "description": "Detected Claude Code version at check time"
+            }
           }
         }
       }
