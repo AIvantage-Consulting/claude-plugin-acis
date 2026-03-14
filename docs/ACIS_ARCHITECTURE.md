@@ -110,7 +110,7 @@ acis/
 ├── commands/
 │   ├── acis.md                          # Main ACIS command
 │   ├── acis-init.md                     # Project bootstrapping
-│   └── acis-audit.md                    # Process Auditor
+│   └── audit-process.md                 # Process Auditor
 ├── schemas/
 │   ├── acis-goal.schema.json            # Goal JSON schema
 │   ├── acis-decision.schema.json        # Decision schema

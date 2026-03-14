@@ -313,6 +313,291 @@ Remediation considers **precision** (prioritize high-impact first).
 
 **Section-Agnostic Extraction**: Treat ALL sections equally. Whether an issue appears in "Issues", "Performance Review", "Code Quality", or "Specific Issues" section - if it's quantifiable, extract it. Section only affects the `lens` categorization in the goal file.
 
+### Step 4.1: Auto-Generate Functional Checks
+
+For each goal with `remediation.strategy` of `replace` or `refactor`, auto-generate `detection.functional_checks[]` entries based on project context:
+
+#### Auto-Generation Rules by Strategy
+
+| Strategy | Auto-Generated Checks | Condition |
+|----------|----------------------|-----------|
+| `replace` | `tsc --noEmit` (TypeScript compilation) | `tsconfig.json` exists in project |
+| `replace` | Targeted test command for affected files | Test framework detected (jest, vitest, mocha) |
+| `refactor` | Same as `replace` + behavior preservation check | Always |
+| `remove` | Optional — removal rarely breaks functionality | At agent discretion |
+| `add` | Recommended — test the new feature works | Test framework detected |
+| `wrap` / `custom` | At agent discretion | — |
+
+#### Project Detection
+
+```bash
+# Detect TypeScript project
+has_typescript() {
+  [ -f "tsconfig.json" ] && echo "YES" || echo "NO"
+}
+
+# Detect test framework
+detect_test_framework() {
+  if [ -f "package.json" ]; then
+    local pkg=$(cat package.json)
+    if echo "$pkg" | grep -q '"jest"'; then echo "jest"
+    elif echo "$pkg" | grep -q '"vitest"'; then echo "vitest"
+    elif echo "$pkg" | grep -q '"mocha"'; then echo "mocha"
+    else echo "none"
+    fi
+  else
+    echo "none"
+  fi
+}
+
+# Detect test files for affected paths
+find_related_tests() {
+  local file_path="$1"
+  local base_name=$(basename "$file_path" | sed 's/\.[^.]*$//')
+  local dir_name=$(dirname "$file_path")
+
+  # Check common test file patterns
+  for pattern in "${base_name}.test" "${base_name}.spec" "${base_name}-test"; do
+    found=$(find "$dir_name" -name "${pattern}.*" -type f 2>/dev/null | head -1)
+    [ -n "$found" ] && echo "$found" && return
+  done
+
+  # Check __tests__ directory
+  found=$(find "$dir_name/__tests__" -name "${base_name}.*" -type f 2>/dev/null | head -1)
+  [ -n "$found" ] && echo "$found"
+}
+```
+
+#### Example Auto-Generated Functional Checks
+
+For a TypeScript project using Jest with `strategy: "replace"`:
+
+```json
+{
+  "functional_checks": [
+    {
+      "check_id": "typescript_compiles",
+      "description": "Verify replacement code compiles without type errors",
+      "command": "npx tsc --noEmit 2>&1 | head -20; exit ${PIPESTATUS[0]}",
+      "parse_type": "exit_code",
+      "expected_exit_code": 0,
+      "severity": "blocking",
+      "tier": "T2"
+    },
+    {
+      "check_id": "related_tests_pass",
+      "description": "Verify tests for affected files still pass after replacement",
+      "command": "npx jest --testPathPattern='SessionManager' --passWithNoTests 2>&1; exit $?",
+      "parse_type": "exit_code",
+      "expected_exit_code": 0,
+      "severity": "blocking",
+      "tier": "T2"
+    }
+  ]
+}
+```
+
+#### Missing Functional Check Warning
+
+If a goal has `remediation.strategy` of `replace` or `refactor` and no `functional_checks` could be auto-generated (no test framework, no TypeScript):
+
+```
+WARNING: Goal {id} has strategy="{strategy}" with grep-only verification.
+Risk: Replacement code could be functionally broken but pass detection.
+Recommendation: Add manual functional_checks to the goal file.
+```
+
+Log this warning in the extraction report (Step 7) under a new "Functional Verification Warnings" subsection.
+
+### Step 4.5: Cross-Section Correlation & Security Keyword Escalation
+
+After extracting all quantifiable items (Step 4), correlate items across review sections to catch severity misclassification and ensure security-related items are properly escalated.
+
+#### Step 4.5.1: Build Section-Origin Index
+
+Group extracted items by which review section(s) they appeared in. Two items are considered "the same" if ANY of these match:
+
+| Match Criterion | Example |
+|-----------------|---------|
+| Same code pattern (detection.pattern) | Both reference `Math\.random` |
+| Same file + overlapping line range | Both point to `auth.ts:45-60` |
+| >80% keyword overlap in description | "HMAC not used for tokens" vs "Token signing lacks HMAC" |
+
+```bash
+# Build section index from extracted items (Bash 3.2 compatible)
+# Each item has source_sections[] from the LLM extraction (Step 4)
+section_index_file="/tmp/acis-section-index-PR${pr_number}.json"
+
+# Aggregate: for each item, list all sections it appeared in
+jq -s '
+  group_by(.detection.pattern) |
+  map({
+    pattern: .[0].detection.pattern,
+    description: .[0].detection.pattern_description,
+    sections: [.[].source.source_sections[]?] | unique,
+    items: [.[].id],
+    severity: .[0].source.severity
+  }) |
+  map(select(.sections | length > 0))
+' "$goals_dir"/PR${pr_number}-*.json > "$section_index_file"
+```
+
+#### Step 4.5.2: Cross-Section Correlation Rules
+
+Apply escalation rules based on cross-section presence:
+
+| Condition | Action | Tag |
+|-----------|--------|-----|
+| Item in ANY section + "Security Assessment" section | Auto-escalate to HIGH minimum | `escalated:security-section-overlap` |
+| Item in 3+ sections (any type) | Auto-escalate to HIGH minimum | `escalated:cross-section-3plus` |
+| Item in 2 sections (non-security) | Link via `metadata.related_goals`, keep severity | `correlated:cross-section-2` |
+| Item in 1 section only | No action | — |
+
+```bash
+# Apply cross-section correlation rules (Bash 3.2 compatible)
+correlate_cross_section() {
+  local item_file="$1"
+  local sections_json="$2"  # JSON array of section names
+
+  local section_count=$(echo "$sections_json" | jq -r 'length')
+  local has_security=$(echo "$sections_json" | jq -r 'map(select(test("(?i)security"))) | length')
+  local current_severity=$(jq -r '.source.severity' "$item_file")
+  local original_severity="$current_severity"
+  local escalation_reason=""
+
+  # Rule 1: Any section + Security Assessment → escalate to HIGH
+  if [ "$has_security" -gt 0 ] && [ "$section_count" -gt 1 ]; then
+    if [ "$current_severity" = "low" ] || [ "$current_severity" = "medium" ]; then
+      current_severity="high"
+      escalation_reason="security-section-overlap"
+    fi
+  fi
+
+  # Rule 2: 3+ sections → escalate to HIGH
+  if [ "$section_count" -ge 3 ]; then
+    if [ "$current_severity" = "low" ] || [ "$current_severity" = "medium" ]; then
+      current_severity="high"
+      escalation_reason="cross-section:${section_count}-sections"
+    fi
+  fi
+
+  # Apply escalation if needed
+  if [ "$current_severity" != "$original_severity" ]; then
+    jq --arg sev "$current_severity" \
+       --arg orig "$original_severity" \
+       --arg reason "$escalation_reason" \
+       '.source.severity = $sev |
+        .metadata.tags += ["escalated:" + $reason, "original-severity:" + $orig]' \
+       "$item_file" > "${item_file}.tmp" && mv "${item_file}.tmp" "$item_file"
+    echo "ESCALATED: $(jq -r '.id' "$item_file") $orig → $current_severity ($escalation_reason)"
+  fi
+}
+```
+
+#### Step 4.5.3: Security-Domain Keyword Detection
+
+Scan all extracted items for security-domain keywords. Items matching any keyword that are below HIGH severity are auto-escalated.
+
+**Security Keyword List**:
+```
+HMAC, crypto, salt, hash, encrypt, decrypt, token, key, auth, JWT,
+OAuth, password, secret, credential, certificate, TLS, SSL, signature,
+signing, PKI, RSA, AES, SHA, MD5, bcrypt, scrypt, argon2, PBKDF2,
+session, cookie, CORS, CSRF, XSS, injection, sanitize, escape, validate
+```
+
+```bash
+# Security keyword detection (Bash 3.2 compatible)
+SECURITY_KEYWORDS="HMAC|crypto|salt|hash|encrypt|decrypt|token|key|auth|JWT|OAuth|password|secret|credential|certificate|TLS|SSL|signature|signing|PKI|RSA|AES|SHA|MD5|bcrypt|scrypt|argon2|PBKDF2|session|cookie|CORS|CSRF|XSS|injection|sanitize|escape|validate"
+
+check_security_keywords() {
+  local item_file="$1"
+  local description=$(jq -r '.detection.pattern_description // .source.original_comment' "$item_file")
+  local current_severity=$(jq -r '.source.severity' "$item_file")
+
+  # Case-insensitive grep for security keywords
+  matched_keyword=$(echo "$description" | grep -oiE "$SECURITY_KEYWORDS" | head -1)
+
+  if [ -n "$matched_keyword" ] && [ "$current_severity" != "high" ] && [ "$current_severity" != "critical" ]; then
+    jq --arg sev "high" \
+       --arg orig "$current_severity" \
+       --arg kw "$matched_keyword" \
+       '.source.severity = $sev |
+        .metadata.tags += ["escalated:security-keyword:" + $kw, "original-severity:" + $orig]' \
+       "$item_file" > "${item_file}.tmp" && mv "${item_file}.tmp" "$item_file"
+    echo "ESCALATED (keyword): $(jq -r '.id' "$item_file") $current_severity → high (keyword: $matched_keyword)"
+  fi
+}
+
+# Run keyword detection on all extracted goals
+for goal_file in "$goals_dir"/PR${pr_number}-*.json; do
+  check_security_keywords "$goal_file"
+done
+```
+
+#### Step 4.5.4: Populate Related Goals
+
+For items appearing in 2+ sections, create bi-directional `metadata.related_goals` links:
+
+```bash
+# Link related goals (items correlated across sections)
+link_related_goals() {
+  local index_file="$1"
+  local goals_dir="$2"
+
+  # For each group with multiple items
+  jq -c '.[] | select(.items | length > 1)' "$index_file" | while IFS= read -r group; do
+    local item_ids=$(echo "$group" | jq -r '.items[]')
+
+    # For each item in the group, add all OTHER items as related
+    for item_id in $item_ids; do
+      local item_file="${goals_dir}/${item_id}.json"
+      [ -f "$item_file" ] || continue
+
+      local related=$(echo "$group" | jq -r --arg self "$item_id" '.items | map(select(. != $self))')
+      jq --argjson related "$related" \
+         '.metadata.related_goals = (.metadata.related_goals + $related | unique)' \
+         "$item_file" > "${item_file}.tmp" && mv "${item_file}.tmp" "$item_file"
+    done
+  done
+}
+
+link_related_goals "$section_index_file" "$goals_dir"
+```
+
+#### Step 4.5.5: Correlation Summary JSON
+
+Write a correlation summary for the Step 7 report and Step 6.5 completeness check:
+
+```bash
+# Generate correlation summary
+correlation_summary="${goals_dir}/correlation-summary-PR${pr_number}.json"
+
+jq -s '
+  {
+    pr_number: '"$pr_number"',
+    timestamp: (now | todate),
+    total_items_analyzed: length,
+    escalated_items: [.[] | select(.metadata.tags[]? | test("^escalated:"))],
+    cross_section_groups: (
+      group_by(.detection.pattern) |
+      map(select(length > 1)) |
+      map({
+        pattern: .[0].detection.pattern_description,
+        sections: [.[].source.source_sections[]?] | unique,
+        goal_ids: [.[].id],
+        action: (if ([.[].source.source_sections[]?] | unique | length) >= 3 then "escalated"
+                 elif ([.[].source.source_sections[]?] | unique | map(test("(?i)security")) | any) then "escalated"
+                 else "linked" end)
+      })
+    ),
+    keyword_escalations: [.[] | select(.metadata.tags[]? | test("^escalated:security-keyword:"))] | length
+  }
+' "$goals_dir"/PR${pr_number}-*.json > "$correlation_summary"
+
+echo "Correlation summary written to: $correlation_summary"
+```
+
 ### Step 5: Generate Goal Files
 
 **Extract ALL quantifiable issues, then sort by severity for prioritization order**:
@@ -442,6 +727,121 @@ for goal_file in "$goals_dir"/PR${pr_number}-*.json; do
 done
 ```
 
+### Step 6.5: Extraction Completeness Check
+
+After generating and validating goals, verify extraction completeness by comparing the total quantifiable items identified in Step 4 against the goals successfully generated in Step 5.
+
+#### Step 6.5.1: Count Items vs Goals
+
+```bash
+# Count total quantifiable items from Step 4 (LLM extraction output)
+total_items=$(jq -r 'length' /tmp/acis-extracted-items-PR${pr_number}.json 2>/dev/null || echo "0")
+
+# Count generated goal files
+generated_goals=$(find "$goals_dir" -name "PR${pr_number}-*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+# Compute coverage percentage (Bash 3.2 integer arithmetic)
+if [ "$total_items" -gt 0 ]; then
+  coverage_pct=$((generated_goals * 100 / total_items))
+else
+  coverage_pct=100
+fi
+```
+
+#### Step 6.5.2: Identify Unmatched Items
+
+For items that were identified but have no corresponding goal file, classify the reason:
+
+| Reason | Description |
+|--------|-------------|
+| `dedup_removed` | Item was deduplicated against an existing resolution in Phase 0 |
+| `detection_invalid` | Detection command failed dry-run validation in Step 6.1 |
+| `severity_filtered` | Item was filtered out by `--severity` flag |
+| `generation_error` | Goal file generation failed (JSON error, missing fields) |
+
+```bash
+# Build unmatched items list
+unmatched_items="[]"
+
+# Compare extracted items against generated goals
+jq -c '.[]' /tmp/acis-extracted-items-PR${pr_number}.json 2>/dev/null | while IFS= read -r item; do
+  item_id=$(echo "$item" | jq -r '.id')
+  goal_file="${goals_dir}/${item_id}.json"
+
+  if [ ! -f "$goal_file" ]; then
+    # Determine reason
+    reason="generation_error"  # default
+
+    # Check if it was deduped
+    if echo "$item" | jq -e '.resolution_status' > /dev/null 2>&1; then
+      reason="dedup_removed"
+    fi
+
+    # Check if detection was invalid
+    if echo "$item" | jq -e '.detection_invalid' > /dev/null 2>&1; then
+      reason="detection_invalid"
+    fi
+
+    # Check if severity-filtered
+    if echo "$item" | jq -e '.severity_filtered' > /dev/null 2>&1; then
+      reason="severity_filtered"
+    fi
+
+    echo "{\"item_id\":\"$item_id\",\"description\":$(echo "$item" | jq '.detection.pattern_description'),\"reason\":\"$reason\",\"source_section\":$(echo "$item" | jq '.source.source_sections[0] // "unknown"'),\"original_severity\":$(echo "$item" | jq '.source.severity')}"
+  fi
+done | jq -s '.' > /tmp/acis-unmatched-PR${pr_number}.json
+```
+
+#### Step 6.5.3: Write Extraction Coverage File
+
+```bash
+# Load correlation data if available
+correlation_file="${goals_dir}/correlation-summary-PR${pr_number}.json"
+escalated_count=0
+if [ -f "$correlation_file" ]; then
+  escalated_count=$(jq -r '.keyword_escalations + (.escalated_items | length)' "$correlation_file" 2>/dev/null || echo "0")
+fi
+
+# Write extraction coverage file
+coverage_file="${goals_dir}/extraction-coverage-PR${pr_number}.json"
+
+cat > "$coverage_file" << COVERAGE_EOF
+{
+  "pr_number": ${pr_number},
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "acis_version": "2.12.0",
+  "total_items": ${total_items},
+  "extracted_items": ${generated_goals},
+  "coverage_pct": ${coverage_pct},
+  "escalated_items": ${escalated_count},
+  "unmatched_items": $(cat /tmp/acis-unmatched-PR${pr_number}.json 2>/dev/null || echo "[]"),
+  "coverage_status": "$(
+    if [ "$coverage_pct" -eq 100 ]; then echo "COMPLETE"
+    elif [ "$coverage_pct" -ge 90 ]; then echo "ACCEPTABLE"
+    elif [ "$coverage_pct" -ge 75 ]; then echo "INCOMPLETE"
+    else echo "CRITICAL"
+    fi
+  )"
+}
+COVERAGE_EOF
+
+echo "Extraction coverage written to: $coverage_file"
+```
+
+#### Step 6.5.4: Warn on Incomplete Coverage
+
+```bash
+if [ "$coverage_pct" -lt 100 ]; then
+  echo ""
+  echo "⚠️  EXTRACTION COVERAGE: ${coverage_pct}% (${generated_goals} of ${total_items} items)"
+  echo "    Unmatched items saved to: /tmp/acis-unmatched-PR${pr_number}.json"
+  echo "    Coverage file: ${coverage_file}"
+  if [ "$coverage_pct" -lt 90 ]; then
+    echo "    STATUS: INCOMPLETE — review unmatched items before proceeding to remediation"
+  fi
+fi
+```
+
 ### Step 7: Present Extraction Report
 
 Output summary:
@@ -481,6 +881,34 @@ Output summary:
 ║  └────────────────────────────┴──────────┴──────────┴─────────┴──────────┘  ║
 ║                                                                              ║
 ║  (Sorted by severity: critical → high → medium → low)                        ║
+║                                                                              ║
+║  🔗 CROSS-SECTION CORRELATIONS: {correlation_count}                          ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  ┌──────────────────────────┬──────────────────────────┬───────────────────┐ ║
+║  │ Pattern                  │ Sections Found In        │ Action            │ ║
+║  ├──────────────────────────┼──────────────────────────┼───────────────────┤ ║
+║  │ HMAC token signing       │ Security Assessment,     │ ESCALATED med→hi  │ ║
+║  │                          │ Code Duplication,        │ (security-keyword │ ║
+║  │                          │ Specific Issues          │  + 3 sections)    │ ║
+║  │ Unused imports           │ Code Quality,            │ LINKED (2 sect)   │ ║
+║  │                          │ Maintainability          │                   │ ║
+║  └──────────────────────────┴──────────────────────────┴───────────────────┘ ║
+║                                                                              ║
+║  Keyword escalations: {keyword_count} items matched security keywords        ║
+║  Section-overlap escalations: {section_count} items in 3+ sections           ║
+║                                                                              ║
+║  📈 EXTRACTION COMPLETENESS: {coverage_pct}% ({extracted}/{total} items)     ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  Status: {COMPLETE|ACCEPTABLE|INCOMPLETE|CRITICAL}                           ║
+║  Coverage file: {goals_dir}/extraction-coverage-PR{N}.json                   ║
+║                                                                              ║
+║  {IF_UNMATCHED}                                                              ║
+║  Unmatched items ({unmatched_count}):                                        ║
+║    • {item_1}: {reason} (from "{section}")                                   ║
+║    • {item_2}: {reason} (from "{section}")                                   ║
+║  {END_IF}                                                                    ║
 ║                                                                              ║
 ║  🔄 RE-CHECKED (file changes detected): {count}                              ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║

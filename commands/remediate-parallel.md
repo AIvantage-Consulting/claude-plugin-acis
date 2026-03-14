@@ -149,6 +149,12 @@ For each goal (in parallel via separate Task agents):
        Run step.verification.command
        Compare result to step.verification.expected_after
 
+    3.5. FUNCTIONAL CHECK (if goal has detection.functional_checks[])
+         Run each functional check command
+         If ANY blocking check fails → mark step as NEEDS_REWORK
+         If all blocking checks pass → proceed to commit
+         Advisory failures → log warning in step manifest
+
     4. COMMIT STEP (atomic, with metrics)
        git add ${step.scope.files}
        git commit -m "[${step.step_id}] ${step.action}: ${step.description}
@@ -158,6 +164,15 @@ For each goal (in parallel via separate Task agents):
     5. UPDATE STATE
        Mark step complete in manifest
        Record commit hash and metrics
+
+    5.5. INCREMENT ITERATION COUNTER
+         Update goal JSON: progress.iterations += 1
+         Record step metrics in progress.metrics_history[]:
+           { iteration: N, timestamp: ISO, metrics: { step_id, before, after, target } }
+         Stage and amend last commit to include updated goal JSON:
+           jq '.progress.iterations += 1' "${goal_file}" > tmp && mv tmp "${goal_file}"
+           git add "${goal_file}"
+           git commit --amend --no-edit
 
     6. CHECKPOINT (optional, for recovery)
        git push origin acis/${goal_id}  # If --push-branches
@@ -177,6 +192,24 @@ For each goal (in parallel via separate Task agents):
 
 2. MERGE GOAL BRANCHES (sequential, preserve atomic history)
    for goal_id in batch.goals (ordered by priority):
+
+     2.1. PRE-MERGE DIVERGENCE CHECK (regression-aware conflict detection)
+          For each file in next_goal.affected_files:
+            worktree_hash = git hash-object .acis-work/${goal_id}/${file}
+            integration_hash = git show HEAD:${file} | git hash-object --stdin
+            if worktree_hash != integration_hash AND file was modified by a previous merge:
+              DIVERGENCE DETECTED:
+                - File: ${file}
+                - Worktree base: ${worktree_base_commit}
+                - Integration HEAD: ${integration_head}
+                - Modified by: ${previous_goal_id} (merged earlier)
+              CLASSIFY RISK:
+                HIGH_RISK: Previous merge changed file semantics (not just formatting)
+                  → Require sequential rebase of ${goal_id} onto integration HEAD
+                  → Re-run step verification after rebase
+                LOW_RISK: Previous merge only changed unrelated sections
+                  → Proceed with merge, monitor for conflicts
+              LOG: "DIVERGENCE: ${file} modified by ${previous_goal_id}, ${goal_id} worktree has stale version"
 
      ATTEMPT MERGE:
        git merge acis/${goal_id} --no-ff -m "Merge ${goal_id}"
@@ -205,6 +238,17 @@ For each goal (in parallel via separate Task agents):
      VERIFY AFTER EACH MERGE:
        Run goal's detection command
        If regression detected → git revert HEAD → investigate
+       Run goal's functional_checks (if present)
+       If blocking functional check fails → git revert HEAD → investigate
+
+     2.2. POST-MERGE DIVERGENCE UPDATE
+          Update affected_files index for subsequent merges:
+            merged_files = git diff --name-only HEAD~1 HEAD
+            for each remaining goal in batch.goals:
+              overlap = remaining_goal.affected_files ∩ merged_files
+              if overlap:
+                remaining_goal.divergence_risk[${goal_id}] = overlap
+                LOG: "POST-MERGE: ${remaining_goal_id} has ${#overlap} files diverged by ${goal_id}"
 
 3. VERIFY INTEGRATION BRANCH
    Run ALL detection commands
@@ -227,10 +271,14 @@ For each goal (in parallel via separate Task agents):
 
 1. FINAL VERIFICATION
    Checkout integration branch
-   Run full verification suite
+   Run full verification suite:
+     - Detection commands for all goals
+     - Functional checks for all goals with detection.functional_checks[]
+     - Test suite
+     - Build
 
-   If PASS → proceed
-   If FAIL → abort and report
+   If PASS (all detection + functional + tests + build) → proceed
+   If FAIL → abort and report (include which functional checks failed)
 
 2. PRESERVE HISTORY (before squashing)
    git tag acis/history/BATCH-${WO}-${NNN} acis/integrate-${WO}-batch-${NNN}

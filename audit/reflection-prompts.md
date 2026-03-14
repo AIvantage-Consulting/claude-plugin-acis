@@ -10,6 +10,46 @@ These prompts guide the Process Auditor's analysis of completed remediation cycl
 
 ## REFLECT Phase Prompts
 
+### Extraction Coverage Verification
+
+**Prompt 0: Extraction Coverage (Runs FIRST)**
+```
+Before analyzing goal patterns, verify that the extraction itself was complete.
+
+For each unique source.pr_number in the audited goals:
+
+1. LOAD COVERAGE DATA:
+   - Primary: Load {goals_dir}/extraction-coverage-PR{N}.json (written by /acis extract v2.12.0+)
+   - Fallback (pre-v2.12.0): Fetch PR review via `gh api repos/{owner}/{repo}/pulls/{N}/reviews`
+     and compare review items against extracted goals manually
+
+2. CLASSIFY EACH GAP (if any unmatched items exist):
+   For each item in the review that has no corresponding goal:
+   - `missed_by_llm`: Item was quantifiable but the extraction LLM did not identify it
+   - `filtered_by_severity`: Item was extracted but filtered out by --severity flag
+   - `dedup_false_positive`: Item was incorrectly deduplicated against an existing resolution
+   - `cross_section_missed`: Item appeared in multiple sections but was only extracted from one,
+     missing the cross-section severity escalation
+
+3. TIMESTAMP GAP DETECTION:
+   - Sort all goals by metadata.created_at
+   - Flag gaps >5 minutes between consecutive goal creation timestamps
+   - Gaps indicate possible manual intervention or extraction interruption
+   - Record as: { gap_after: "{goal_id}", gap_duration_minutes: {N}, indicator: "manual_intervention" }
+
+4. COVERAGE ASSESSMENT:
+   - 100% coverage = COMPLETE → log as reinforcement
+   - >=90% coverage = ACCEPTABLE → log gaps as minor corrections
+   - <90% coverage = INCOMPLETE → auto-classify as CORRECTION with priority: high
+   - <75% coverage = CRITICAL → auto-classify as CORRECTION with priority: critical
+
+Output:
+  - coverage_assessment: COMPLETE | ACCEPTABLE | INCOMPLETE | CRITICAL
+  - gap_classifications: [{ item, classification, section, severity }]
+  - manual_interventions: [{ gap_after, duration, indicator }]
+  - recommendation: reinforcement | correction (with priority)
+```
+
 ### Pattern Analysis
 
 **Prompt 1: Cross-Goal Patterns**
@@ -47,6 +87,54 @@ Detection commands to investigate:
 - Commands with >1 false positive/negative
 - Commands that took >10 seconds
 - Commands used in >3 goals (potential for abstraction)
+```
+
+**Prompt 2.5: Functional Correctness Gap Analysis**
+```
+Analyze functional verification coverage across achieved goals:
+
+1. CLASSIFY EACH ACHIEVED GOAL by verification method:
+
+   | Classification | Criteria | Risk Level |
+   |----------------|----------|------------|
+   | `grep_only` | strategy=replace/refactor, NO functional_checks | HIGH RISK |
+   | `functional_verified` | strategy=replace/refactor, functional_checks present AND passed | LOW RISK |
+   | `false_positive_caught` | functional_checks caught broken replacement (false_positive_flags non-empty) | MEDIUM RISK (was caught) |
+   | `not_applicable` | strategy=remove/add/wrap/custom OR no detection.functional_checks needed | N/A |
+
+2. COVERAGE METRICS:
+   - Total replace/refactor goals: {count}
+   - With functional checks: {count} ({pct}%)
+   - Without functional checks (grep-only): {count} ({pct}%)
+   - False positives caught: {count}
+
+3. GREP-ONLY RISK ANALYSIS:
+   For each grep_only goal:
+   - Goal ID: {id}
+   - Strategy: {strategy}
+   - Detection command: {primary_command}
+   - Risk: Replacement could be functionally broken but pass detection
+   - Recommendation: Add functional_checks (suggest specific checks based on project context)
+
+4. FALSE POSITIVE ANALYSIS:
+   For each goal with false_positive_flags:
+   - Goal ID: {id}
+   - Iteration where caught: {iteration}
+   - What was broken: {notes}
+   - Impact if not caught: {assessment}
+
+5. RECOMMENDATIONS:
+   - If grep_only_pct > 20%: "CRITICAL: {N} replace/refactor goals lack functional verification"
+   - If false_positive_count > 0: "REINFORCEMENT: Functional checks prevented {N} false achievements"
+   - Suggest specific functional checks for unprotected goals
+   - Flag any patterns where same functional check could cover multiple goals
+
+Output:
+  - functional_coverage_pct: {number}
+  - grep_only_goals: [{goal_ids}]
+  - false_positives_caught: {count}
+  - risk_assessment: LOW | MEDIUM | HIGH | CRITICAL
+  - recommendations: [{type, description, affected_goals}]
 ```
 
 **Prompt 3: 5 Whys Effectiveness**

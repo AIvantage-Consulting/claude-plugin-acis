@@ -110,6 +110,80 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Additional supporting evidence"
+        },
+        "extraction_coverage": {
+          "type": "object",
+          "description": "Extraction completeness data from /acis extract",
+          "properties": {
+            "pr_number": {
+              "type": "integer",
+              "description": "PR number this coverage data relates to"
+            },
+            "total_items": {
+              "type": "integer",
+              "description": "Total quantifiable items identified in the PR review"
+            },
+            "extracted_items": {
+              "type": "integer",
+              "description": "Number of items successfully extracted as goals"
+            },
+            "coverage_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Extraction coverage percentage (extracted/total * 100)"
+            },
+            "gaps": {
+              "type": "array",
+              "description": "Items identified but not extracted, with reasons",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "item_description": { "type": "string" },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["dedup_removed", "detection_invalid", "severity_filtered", "generation_error", "missed_by_llm", "filtered_by_severity", "dedup_false_positive", "cross_section_missed"]
+                  },
+                  "source_section": { "type": "string" },
+                  "original_severity": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "cross_section_correlations": {
+          "type": "array",
+          "description": "Items that appeared across multiple PR review sections, with escalation data",
+          "items": {
+            "type": "object",
+            "properties": {
+              "item_description": {
+                "type": "string",
+                "description": "Description of the correlated item"
+              },
+              "sections_found_in": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Review sections where this item appeared"
+              },
+              "severity_escalated": {
+                "type": "boolean",
+                "description": "Whether severity was escalated due to cross-section or keyword rules"
+              },
+              "original_severity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"]
+              },
+              "final_severity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"]
+              },
+              "escalation_reason": {
+                "type": "string",
+                "description": "Why severity was escalated (e.g., 'cross-section:3-sections', 'security-keyword:HMAC', 'security-section-overlap')"
+              }
+            }
+          }
         }
       }
     },

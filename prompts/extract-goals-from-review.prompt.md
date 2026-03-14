@@ -75,6 +75,13 @@ Categorize as: security | privacy | performance | maintainability | accessibilit
 **f) Severity**
 Rate as: critical | high | medium | low
 
+**g) Source Sections (REQUIRED)**
+For each extracted item, record EVERY review section where this issue was mentioned:
+- Annotate with `"source_sections": ["Section Name 1", "Section Name 2", ...]`
+- Use the exact section headings from the review (e.g., "Security Assessment", "Code Duplication", "Performance Review", "Specific Issues")
+- If the same underlying issue (same code pattern, same file+line range, or >80% keyword overlap) appears in multiple sections, list ALL sections
+- This is critical for cross-section correlation in Step 4.5
+
 ### 4. Output Format
 
 Return a JSON array:
@@ -87,7 +94,8 @@ Return a JSON array:
       "reviewer": "codex|claude|gemini|human",
       "lens": "security",
       "severity": "high",
-      "original_comment": "The original review comment text"
+      "original_comment": "The original review comment text",
+      "source_sections": ["Security Assessment", "Code Duplication"]
     },
     "detection": {
       "pattern": "regex pattern",

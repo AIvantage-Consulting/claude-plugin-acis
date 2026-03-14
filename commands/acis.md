@@ -1,4 +1,4 @@
-# ACIS v2.7.0 - Automated Code Improvement System
+# ACIS v2.13.0 - Automated Code Improvement System
 
 ## First-Use Upgrade Check (Auto-Detect)
 
@@ -52,7 +52,7 @@ If `missing_components` is not empty, display a non-intrusive notice:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ ACIS v2.7.0: Upgrade available. Run '/acis upgrade' for new   │
+│ ACIS v2.13.0: Upgrade available. Run '/acis upgrade' for new   │
 │ features (pre-commit review, version command).                  │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -68,7 +68,7 @@ If `missing_components` is not empty, display a non-intrusive notice:
 
 ---
 
-You are executing the Automated Code Improvement System (ACIS) v2.7.0 workflow with:
+You are executing the Automated Code Improvement System (ACIS) v2.13.0 workflow with:
 - **Decision-oriented discovery** (surface macro/micro decisions before implementation)
 - **Dual-CEO validation** (independent recommendations from AI-Native + Modern SWE perspectives)
 - **Multi-perspective discovery** (10+ agents in parallel)
@@ -306,10 +306,13 @@ mcp__codex__codex(prompt="CEO-Beta...", sandbox="read-only")
 | `status` | Show progress across all goals and manifests |
 | `verify <goal-file>` | Run consensus verification only |
 | `pre-commit-review` | Quick design review of staged changes before commit |
-| `audit` | Process Auditor: analyze patterns, generate skills, improve ACIS itself |
+| `audit` | Alias for `audit-process` |
+| `audit-process` | Process Auditor: analyze patterns, generate skills, improve ACIS itself |
 | `implement-parallel` | Build subsystems from GENESIS specs in parallel via worktrees |
 | `feedback` | Report bugs, request features, or give general feedback |
 | `upgrade` | Check for and install missing ACIS components |
+| `audit-project [<scope>]` | Alias for `critical-review` |
+| `critical-review [<scope>]` | Multi-perspective code health assessment with A-F grading |
 | `version` | Display installed plugin version |
 
 ## Subcommand Routing
@@ -323,7 +326,10 @@ Bootstraps ACIS for a new project:
 - Generates `.acis-config.json` with personas, compliance, architecture
 
 ### `/acis audit`
-Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/acis-audit.md`
+Alias for `/acis audit-process`. Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/audit-process.md`
+
+### `/acis audit-process`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/audit-process.md`
 
 Process Auditor (Loop 1 - Outermost):
 - PAUSE: Halt active work, establish audit scope
@@ -368,6 +374,20 @@ Report bugs, request features, or give general feedback:
 - Auto-collects environment context (version, OS, config status)
 - Submits to GitHub Issues or saves locally
 - `--submit-pending` to batch-submit local feedback
+
+### `/acis audit-project`
+Alias for `/acis critical-review`. Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/critical-review.md`
+
+### `/acis critical-review`
+Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/critical-review.md`
+
+Multi-perspective code health assessment:
+- T1 pattern detection using assessment lenses
+- Parallel perspective agents for deep analysis
+- Cross-perspective correlation with escalation rules
+- Per-lens health scores (A-F grades) with density metrics
+- Optional remediation goal generation
+- Delta comparison against previous reviews
 
 ### `/acis version`
 Delegates to `${CLAUDE_PLUGIN_ROOT}/commands/version.md`

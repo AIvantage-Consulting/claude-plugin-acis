@@ -228,7 +228,7 @@ acis/
 ├── commands/
 │   ├── acis.md                   # Main ACIS command reference
 │   ├── acis-init.md              # Project bootstrapping
-│   ├── acis-audit.md             # Process Auditor
+│   ├── audit-process.md          # Process Auditor
 │   ├── genesis.md                # GENESIS vision-to-architecture orchestrator
 │   ├── help.md                   # Dynamic help system
 │   ├── status.md                 # Progress dashboard

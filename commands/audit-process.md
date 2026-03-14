@@ -1,11 +1,11 @@
-# /acis audit - Process Auditor Command
+# /acis audit-process - Process Auditor Command
 
 Process improvement through reflection, pattern detection, and dynamic skill generation.
 
 ## Trigger
 
 The Process Auditor is triggered by:
-1. **Manual invocation**: User runs `/acis audit`
+1. **Manual invocation**: User runs `/acis audit` or `/acis audit-process`
 2. **Automatic trigger**: After N goals remediated (default: 5, configurable via `auditThreshold`)
 3. **Milestone completion**: All goals in a PR/WO achieved
 
@@ -100,6 +100,99 @@ PROJECT     PLUGIN
 **Purpose**: Analyze completed remediation and discovery cycles.
 
 **Actions**:
+
+**Action 0: Extraction Coverage Verification** *(runs before all other actions)*
+
+For each unique `source.pr_number` found in the audited goals:
+
+```bash
+# Determine goals directory
+goals_dir=$(jq -r '.paths.goals // "docs/acis/goals"' .acis-config.json 2>/dev/null)
+
+# Collect unique PR numbers from audited goals
+pr_numbers=$(jq -r '.source.pr_number // empty' "$goals_dir"/*.json 2>/dev/null | sort -u)
+
+for pr_num in $pr_numbers; do
+  coverage_file="${goals_dir}/extraction-coverage-PR${pr_num}.json"
+
+  if [ -f "$coverage_file" ]; then
+    # Primary: Load coverage data from v2.12.0+ extraction
+    coverage_pct=$(jq -r '.coverage_pct' "$coverage_file")
+    total_items=$(jq -r '.total_items' "$coverage_file")
+    extracted=$(jq -r '.extracted_items' "$coverage_file")
+    echo "PR #${pr_num}: ${extracted}/${total_items} items extracted (${coverage_pct}%)"
+  else
+    # Fallback: Derive coverage by comparing PR review against extracted goals
+    echo "WARNING: No extraction-coverage-PR${pr_num}.json found (pre-v2.12.0 extraction)"
+    echo "Deriving coverage from PR review via API..."
+    # Fetch PR review comments and count quantifiable items
+    # Compare against goals with source.pr_number == pr_num
+  fi
+done
+```
+
+1. Run **Prompt 0** (Extraction Coverage) from `reflection-prompts.md` against the loaded data
+2. If coverage < 100% for ANY PR: auto-classify as `CORRECTION` recommendation
+3. Store coverage metrics for the DOCUMENT phase report
+4. Record in audit state for trend tracking across audits
+
+**Action 0.5: Functional Verification Coverage Analysis** *(runs after extraction coverage)*
+
+Scan all achieved goals for functional verification gaps:
+
+```bash
+# Scan achieved goals for functional verification coverage
+goals_dir=$(jq -r '.paths.goals // "docs/acis/goals"' .acis-config.json 2>/dev/null)
+
+fc_total=0
+fc_with_checks=0
+fc_grep_only=0
+fc_false_positives=0
+
+for goal_file in "$goals_dir"/*.json; do
+  [ -f "$goal_file" ] || continue
+
+  status=$(jq -r '.progress.status // "pending"' "$goal_file")
+  strategy=$(jq -r '.remediation.strategy // "custom"' "$goal_file")
+  has_fc=$(jq -r '.detection.functional_checks // [] | length' "$goal_file")
+  fp_count=$(jq -r '.achievement_verification.false_positive_flags // [] | length' "$goal_file")
+
+  # Only analyze replace/refactor goals
+  if [ "$strategy" = "replace" ] || [ "$strategy" = "refactor" ]; then
+    fc_total=$((fc_total + 1))
+
+    if [ "$has_fc" -gt 0 ]; then
+      fc_with_checks=$((fc_with_checks + 1))
+    else
+      fc_grep_only=$((fc_grep_only + 1))
+      if [ "$status" = "achieved" ]; then
+        echo "WARNING: Goal $(jq -r '.id' "$goal_file") achieved with strategy=$strategy but NO functional checks (grep-only verification)"
+      fi
+    fi
+
+    fc_false_positives=$((fc_false_positives + fp_count))
+  fi
+done
+
+# Compute coverage
+if [ "$fc_total" -gt 0 ]; then
+  fc_coverage=$((fc_with_checks * 100 / fc_total))
+else
+  fc_coverage=100
+fi
+
+echo "Functional verification coverage: ${fc_coverage}% (${fc_with_checks}/${fc_total} replace/refactor goals)"
+echo "Grep-only goals (high risk): ${fc_grep_only}"
+echo "False positives caught: ${fc_false_positives}"
+```
+
+1. **Flag grep-only replace/refactor goals**: Goals with `strategy` of `replace` or `refactor` but no `detection.functional_checks[]` are classified as HIGH RISK
+2. **Track false positive detections**: Count `achievement_verification.false_positive_flags[]` entries — these indicate the system correctly caught broken replacements
+3. **Generate recommendations**:
+   - If `fc_coverage < 80%`: auto-classify as CORRECTION with priority: high — "Add functional checks to replace/refactor goals"
+   - If `fc_false_positives > 0`: auto-classify as REINFORCEMENT — "Functional checks prevented {N} false-positive achievements"
+4. Store functional coverage metrics for the DOCUMENT phase report
+
 1. Read all goal files with `status: achieved` since last audit
 2. Read all goal files with `status: pending` or `status: failed`
 3. Extract metrics from each goal:
@@ -122,6 +215,8 @@ PROJECT     PLUGIN
 - Compare `effectiveness.assessment` across goals
 
 **Key Questions** (from reflection-prompts.md):
+- Were all review items extracted into goals? *(from Prompt 0 — extraction coverage)*
+- Were there manual interventions during extraction? *(timestamp gap analysis)*
 - What patterns emerged across these remediations?
 - Which detection commands caught issues early vs. late?
 - Which 5 Whys analyses led to lasting fixes vs. rework?
