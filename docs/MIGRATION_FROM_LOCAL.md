@@ -56,7 +56,7 @@ Before starting, verify:
 
 **Action:** Delete this file. It intercepts ACIS commands and uses outdated v2.1 logic.
 
-**Verification:** After removal, `/acis audit` should invoke the plugin's `acis-audit.md`, not the local backup.
+**Verification:** After removal, `/acis audit` should invoke the plugin's `audit-process.md`, not the local backup.
 
 ---
 

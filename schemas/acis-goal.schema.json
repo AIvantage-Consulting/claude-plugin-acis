@@ -4,7 +4,16 @@
   "title": "ACIS v2 Goal Schema",
   "description": "Enhanced schema with multi-perspective discovery, behavioral TDD, and independently verifiable metrics",
   "type": "object",
-  "required": ["id", "source", "detection", "target", "verification", "multi_perspective", "behavioral", "consensus"],
+  "required": [
+    "id",
+    "source",
+    "detection",
+    "target",
+    "verification",
+    "multi_perspective",
+    "behavioral",
+    "consensus"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -13,54 +22,98 @@
     },
     "source": {
       "type": "object",
-      "required": ["origin", "lens", "severity"],
+      "required": [
+        "origin",
+        "lens",
+        "severity"
+      ],
       "properties": {
         "origin": {
           "type": "string",
-          "enum": ["pr-review", "multi-agent-discovery", "manual", "acis-extraction"],
+          "enum": [
+            "pr-review",
+            "multi-agent-discovery",
+            "manual",
+            "acis-extraction",
+            "critical-review"
+          ],
           "description": "How this goal was created"
         },
-        "pr_number": { "type": "integer" },
-        "wo_id": { "type": "string" },
+        "pr_number": {
+          "type": "integer"
+        },
+        "wo_id": {
+          "type": "string"
+        },
         "lens": {
           "type": "string",
           "enum": [
-            "security", "privacy", "performance", "maintainability",
-            "accessibility", "architecture", "testing", "operations",
-            "crash-resilience", "ux", "algorithm-elegance"
+            "security",
+            "privacy",
+            "performance",
+            "maintainability",
+            "accessibility",
+            "architecture",
+            "testing",
+            "operations",
+            "crash-resilience",
+            "ux",
+            "algorithm-elegance"
           ]
         },
         "severity": {
           "type": "string",
-          "enum": ["critical", "high", "medium", "low"]
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
         },
-        "original_comment": { "type": "string" }
+        "original_comment": {
+          "type": "string"
+        }
       }
     },
     "detection": {
       "type": "object",
-      "required": ["primary_command", "verifiable_metrics"],
+      "required": [
+        "primary_command",
+        "verifiable_metrics"
+      ],
       "properties": {
         "primary_command": {
           "type": "string",
           "description": "Main detection command (must be a meaningful shell command)",
           "minLength": 5
         },
-        "pattern": { "type": "string" },
+        "pattern": {
+          "type": "string"
+        },
         "search_paths": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "exclusions": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "verifiable_metrics": {
           "type": "array",
           "description": "Independently verifiable metrics - ALL agents must be able to verify",
           "items": {
             "type": "object",
-            "required": ["metric_id", "name", "command", "expected_value", "tolerance"],
+            "required": [
+              "metric_id",
+              "name",
+              "command",
+              "expected_value",
+              "tolerance"
+            ],
             "properties": {
               "metric_id": {
                 "type": "string",
@@ -80,21 +133,42 @@
               },
               "parse_type": {
                 "type": "string",
-                "enum": ["integer", "float", "boolean", "percentage"],
+                "enum": [
+                  "integer",
+                  "float",
+                  "boolean",
+                  "percentage"
+                ],
                 "default": "integer"
               },
               "expected_value": {
                 "oneOf": [
-                  { "type": "integer" },
-                  { "type": "number" },
-                  { "type": "boolean" },
-                  { "type": "string" }
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
                 ],
                 "description": "Target value for this metric"
               },
               "comparison": {
                 "type": "string",
-                "enum": ["eq", "lte", "gte", "lt", "gt", "contains", "not_contains"],
+                "enum": [
+                  "eq",
+                  "lte",
+                  "gte",
+                  "lt",
+                  "gt",
+                  "contains",
+                  "not_contains"
+                ],
                 "default": "eq"
               },
               "tolerance": {
@@ -109,20 +183,84 @@
               }
             }
           }
+        },
+        "functional_checks": {
+          "type": "array",
+          "description": "Functional correctness checks that run AFTER detection passes. Required for replace/refactor strategies to prevent false-positive achievement when replacement code is broken.",
+          "items": {
+            "type": "object",
+            "required": ["check_id", "description", "command"],
+            "properties": {
+              "check_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "minLength": 3,
+                "description": "Unique identifier for this functional check"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 10,
+                "description": "Human-readable description of what this check verifies"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 5,
+                "description": "Shell command to run (must be Bash 3.2 compatible)"
+              },
+              "parse_type": {
+                "type": "string",
+                "enum": ["exit_code", "stdout", "boolean"],
+                "default": "exit_code",
+                "description": "How to evaluate the command result"
+              },
+              "expected_exit_code": {
+                "type": "integer",
+                "default": 0,
+                "description": "Expected exit code when parse_type is exit_code"
+              },
+              "expected_output": {
+                "type": "string",
+                "description": "Expected stdout when parse_type is stdout"
+              },
+              "output_comparison": {
+                "type": "string",
+                "enum": ["eq", "contains", "not_contains", "regex_match"],
+                "default": "eq",
+                "description": "How to compare actual output to expected_output"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["blocking", "advisory"],
+                "default": "blocking",
+                "description": "Blocking checks prevent achievement; advisory checks are logged as warnings"
+              },
+              "tier": {
+                "type": "string",
+                "enum": ["T1", "T2", "T3"],
+                "default": "T2",
+                "description": "Verification tier for this check"
+              }
+            }
+          }
         }
       }
     },
     "baseline": {
       "type": "object",
       "properties": {
-        "measured_at": { "type": "string", "format": "date-time" },
+        "measured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
         "metrics": {
           "type": "object",
           "additionalProperties": {
             "type": "object",
             "properties": {
               "value": {},
-              "command_output": { "type": "string" }
+              "command_output": {
+                "type": "string"
+              }
             }
           }
         }
@@ -130,11 +268,20 @@
     },
     "target": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["zero", "threshold", "reduction", "existence", "absence", "improvement"]
+          "enum": [
+            "zero",
+            "threshold",
+            "reduction",
+            "existence",
+            "absence",
+            "improvement"
+          ]
         },
         "primary_metric": {
           "type": "string",
@@ -150,28 +297,45 @@
     "multi_perspective": {
       "type": "object",
       "description": "Multi-agent perspective configuration",
-      "required": ["discovery_agents", "verification_agents"],
+      "required": [
+        "discovery_agents",
+        "verification_agents"
+      ],
       "properties": {
         "discovery_agents": {
           "type": "array",
           "description": "Agents for Phase 1 discovery (run in parallel)",
           "items": {
             "type": "object",
-            "required": ["agent_id", "perspective", "source"],
+            "required": [
+              "agent_id",
+              "perspective",
+              "source"
+            ],
             "properties": {
-              "agent_id": { "type": "string" },
+              "agent_id": {
+                "type": "string"
+              },
               "perspective": {
                 "type": "string",
                 "description": "What this agent analyzes"
               },
               "source": {
                 "type": "string",
-                "enum": ["internal", "codex"],
+                "enum": [
+                  "internal",
+                  "codex"
+                ],
                 "description": "Internal Claude agent or external Codex delegation"
               },
               "codex_expert": {
                 "type": "string",
-                "enum": ["Architect", "Code Reviewer", "Security Analyst", "Scope Analyst"],
+                "enum": [
+                  "Architect",
+                  "Code Reviewer",
+                  "Security Analyst",
+                  "Scope Analyst"
+                ],
                 "description": "For Codex delegations, which expert to use"
               },
               "prompt_template": {
@@ -193,17 +357,31 @@
           "description": "Agents for Phase 4 verification consensus (run in parallel)",
           "items": {
             "type": "object",
-            "required": ["agent_id", "perspective", "source", "required_metrics"],
+            "required": [
+              "agent_id",
+              "perspective",
+              "source",
+              "required_metrics"
+            ],
             "properties": {
-              "agent_id": { "type": "string" },
-              "perspective": { "type": "string" },
+              "agent_id": {
+                "type": "string"
+              },
+              "perspective": {
+                "type": "string"
+              },
               "source": {
                 "type": "string",
-                "enum": ["internal", "codex"]
+                "enum": [
+                  "internal",
+                  "codex"
+                ]
               },
               "required_metrics": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "metric_ids this agent MUST verify"
               },
               "veto_power": {
@@ -226,7 +404,9 @@
     "behavioral": {
       "type": "object",
       "description": "Behavioral TDD configuration (enabled by default)",
-      "required": ["enabled"],
+      "required": [
+        "enabled"
+      ],
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -237,7 +417,12 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["Brenda", "David", "Dr. Evans", "System"]
+            "enum": [
+              "Brenda",
+              "David",
+              "Dr. Evans",
+              "System"
+            ]
           },
           "description": "Which personas are affected by this goal"
         },
@@ -245,16 +430,33 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["scenario_id", "given", "when", "then"],
+            "required": [
+              "scenario_id",
+              "given",
+              "when",
+              "then"
+            ],
             "properties": {
-              "scenario_id": { "type": "string" },
-              "persona": { "type": "string" },
-              "given": { "type": "string" },
-              "when": { "type": "string" },
-              "then": { "type": "string" },
+              "scenario_id": {
+                "type": "string"
+              },
+              "persona": {
+                "type": "string"
+              },
+              "given": {
+                "type": "string"
+              },
+              "when": {
+                "type": "string"
+              },
+              "then": {
+                "type": "string"
+              },
               "and": {
                 "type": "array",
-                "items": { "type": "string" }
+                "items": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -268,7 +470,9 @@
     "consensus": {
       "type": "object",
       "description": "Consensus verification configuration (enabled by default)",
-      "required": ["enabled"],
+      "required": [
+        "enabled"
+      ],
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -283,7 +487,9 @@
         },
         "veto_agents": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Agent IDs with veto power"
         },
         "verification_results": {
@@ -291,25 +497,40 @@
           "items": {
             "type": "object",
             "properties": {
-              "agent_id": { "type": "string" },
+              "agent_id": {
+                "type": "string"
+              },
               "verdict": {
                 "type": "string",
-                "enum": ["APPROVE", "REQUEST_CHANGES", "REJECT"]
+                "enum": [
+                  "APPROVE",
+                  "REQUEST_CHANGES",
+                  "REJECT"
+                ]
               },
               "metrics_verified": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
-                    "passed": { "type": "boolean" },
+                    "passed": {
+                      "type": "boolean"
+                    },
                     "actual_value": {},
                     "expected_value": {},
-                    "notes": { "type": "string" }
+                    "notes": {
+                      "type": "string"
+                    }
                   }
                 }
               },
-              "timestamp": { "type": "string", "format": "date-time" },
-              "notes": { "type": "string" }
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "notes": {
+                "type": "string"
+              }
             }
           }
         }
@@ -320,9 +541,15 @@
       "properties": {
         "tier": {
           "type": "integer",
-          "enum": [1, 2, 3]
+          "enum": [
+            1,
+            2,
+            3
+          ]
         },
-        "reasoning": { "type": "string" },
+        "reasoning": {
+          "type": "string"
+        },
         "requires_user_approval": {
           "type": "boolean",
           "default": false
@@ -334,10 +561,21 @@
       "properties": {
         "strategy": {
           "type": "string",
-          "enum": ["replace", "remove", "refactor", "add", "wrap", "custom"]
+          "enum": [
+            "replace",
+            "remove",
+            "refactor",
+            "add",
+            "wrap",
+            "custom"
+          ]
         },
-        "replacement": { "type": "string" },
-        "guidance": { "type": "string" },
+        "replacement": {
+          "type": "string"
+        },
+        "guidance": {
+          "type": "string"
+        },
         "five_whys_required": {
           "type": "boolean",
           "default": false
@@ -349,20 +587,47 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["pending", "discovery", "behavioral_tdd", "ralph_loop", "verification", "quality_gate", "achieved", "blocked", "deferred", "verified_acceptable"]
+          "enum": [
+            "pending",
+            "discovery",
+            "behavioral_tdd",
+            "ralph_loop",
+            "verification",
+            "quality_gate",
+            "achieved",
+            "blocked",
+            "deferred",
+            "verified_acceptable"
+          ]
         },
         "current_phase": {
           "type": "string",
-          "enum": ["init", "discovery", "behavioral", "ralph", "consensus", "quality_gate", "intent_verification", "complete"]
+          "enum": [
+            "init",
+            "discovery",
+            "behavioral",
+            "ralph",
+            "consensus",
+            "quality_gate",
+            "intent_verification",
+            "complete"
+          ]
         },
-        "iterations": { "type": "integer" },
+        "iterations": {
+          "type": "integer"
+        },
         "metrics_history": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "iteration": { "type": "integer" },
-              "timestamp": { "type": "string", "format": "date-time" },
+              "iteration": {
+                "type": "integer"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
               "metrics": {
                 "type": "object",
                 "additionalProperties": {}
@@ -375,11 +640,17 @@
           "items": {
             "type": "object",
             "properties": {
-              "agent_id": { "type": "string" },
-              "findings": { "type": "string" },
+              "agent_id": {
+                "type": "string"
+              },
+              "findings": {
+                "type": "string"
+              },
               "refinements_suggested": {
                 "type": "array",
-                "items": { "type": "string" }
+                "items": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -392,21 +663,40 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["detection_command", "consensus_verified", "quality_gate_passed", "manual_claim", "auto_converged"],
+          "enum": [
+            "detection_command",
+            "detection_and_functional",
+            "consensus_verified",
+            "quality_gate_passed",
+            "manual_claim",
+            "auto_converged"
+          ],
           "description": "How the achievement was verified"
         },
         "confidence": {
           "type": "string",
-          "enum": ["high", "medium", "low"],
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
           "description": "Confidence level based on verification method"
         },
         "detection_result": {
           "type": "object",
           "properties": {
-            "command": { "type": "string" },
-            "output": { "type": "string" },
-            "expected": { "type": "string" },
-            "actual": { "type": "string" }
+            "command": {
+              "type": "string"
+            },
+            "output": {
+              "type": "string"
+            },
+            "expected": {
+              "type": "string"
+            },
+            "actual": {
+              "type": "string"
+            }
           }
         },
         "verified_by": {
@@ -423,7 +713,9 @@
         },
         "affected_files": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Files that were part of the fix - for change detection"
         },
         "ttl_days": {
@@ -441,16 +733,92 @@
           "default": true,
           "description": "Invalidate verification if affected files change"
         },
+        "functional_check_results": {
+          "type": "array",
+          "description": "Results of functional correctness checks run after detection passed",
+          "items": {
+            "type": "object",
+            "required": ["check_id", "passed"],
+            "properties": {
+              "check_id": {
+                "type": "string",
+                "description": "References detection.functional_checks[].check_id"
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "exit_code": {
+                "type": "integer"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["blocking", "advisory"]
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "false_positive_flags": {
+          "type": "array",
+          "description": "Records when detection passed but functional checks failed, indicating a false-positive achievement",
+          "items": {
+            "type": "object",
+            "required": ["iteration", "detection_passed", "functional_failed"],
+            "properties": {
+              "iteration": {
+                "type": "integer",
+                "description": "Ralph-loop iteration where false positive was detected"
+              },
+              "detection_passed": {
+                "type": "boolean",
+                "const": true
+              },
+              "functional_failed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "check_ids of functional checks that failed"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Description of why detection passed but code is functionally broken"
+              }
+            }
+          }
+        },
         "spot_check_history": {
           "type": "array",
           "description": "History of periodic spot-checks",
           "items": {
             "type": "object",
             "properties": {
-              "checked_at": { "type": "string", "format": "date-time" },
-              "still_valid": { "type": "boolean" },
-              "detection_output": { "type": "string" },
-              "notes": { "type": "string" }
+              "checked_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "still_valid": {
+                "type": "boolean"
+              },
+              "detection_output": {
+                "type": "string"
+              },
+              "notes": {
+                "type": "string"
+              }
             }
           }
         }
@@ -479,20 +847,44 @@
           "description": "Verification commands that prove delivery",
           "items": {
             "type": "object",
-            "required": ["criterion_id", "description", "verification_command", "expected_result"],
+            "required": [
+              "criterion_id",
+              "description",
+              "verification_command",
+              "expected_result"
+            ],
             "properties": {
-              "criterion_id": { "type": "string" },
-              "description": { "type": "string" },
-              "verification_command": { "type": "string" },
-              "expected_result": { "type": "string" },
+              "criterion_id": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "verification_command": {
+                "type": "string"
+              },
+              "expected_result": {
+                "type": "string"
+              },
               "comparison": {
                 "type": "string",
-                "enum": ["eq", "contains", "not_contains", "gte", "lte", "gt", "lt"]
+                "enum": [
+                  "eq",
+                  "contains",
+                  "not_contains",
+                  "gte",
+                  "lte",
+                  "gt",
+                  "lt"
+                ]
               }
             }
           }
         },
-        "captured_at": { "type": "string", "format": "date-time" }
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "integrity": {
@@ -503,15 +895,24 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["phase", "hash", "timestamp"],
+            "required": [
+              "phase",
+              "hash",
+              "timestamp"
+            ],
             "properties": {
-              "phase": { "type": "string" },
+              "phase": {
+                "type": "string"
+              },
               "hash": {
                 "type": "string",
                 "pattern": "^[a-f0-9]{64}$",
                 "description": "SHA-256 hash of goal file at this phase"
               },
-              "timestamp": { "type": "string", "format": "date-time" }
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           }
         },
@@ -520,12 +921,22 @@
           "items": {
             "type": "object",
             "properties": {
-              "detected_at": { "type": "string", "format": "date-time" },
-              "expected_hash": { "type": "string" },
-              "actual_hash": { "type": "string" },
+              "detected_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expected_hash": {
+                "type": "string"
+              },
+              "actual_hash": {
+                "type": "string"
+              },
               "user_action": {
                 "type": "string",
-                "enum": ["continued", "aborted"]
+                "enum": [
+                  "continued",
+                  "aborted"
+                ]
               }
             }
           }
@@ -539,12 +950,22 @@
           "type": "string",
           "const": "2.0"
         },
-        "created_at": { "type": "string", "format": "date-time" },
-        "updated_at": { "type": "string", "format": "date-time" },
-        "deferred_to": { "type": "string" },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deferred_to": {
+          "type": "string"
+        },
         "tags": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

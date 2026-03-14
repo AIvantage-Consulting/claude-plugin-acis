@@ -102,6 +102,27 @@ For each command in `detection.primary_command` and `detection.verifiable_metric
 
 If ANY validation fails: ABORT remediation with full error trace. Do NOT proceed.
 
+#### Phase 0.3.1: FUNCTIONAL CHECK DRY-RUN VALIDATION
+
+If `detection.functional_checks[]` is present in the goal file:
+
+For each check in `detection.functional_checks[]`:
+
+1. **Validate command exists**: `command` field must be non-empty (≥5 chars)
+2. **Validate Bash 3.2 compatibility**: Scan command for forbidden constructs:
+   - `declare -A`, `mapfile`, `readarray`, `${var,,}`, `${var^^}`, `shopt -s globstar` → ABORT
+3. **Execute dry-run**: Run command, capture exit code and output
+   - **NOTE**: Functional checks are EXPECTED to fail before the fix is applied
+   - If command fails: LOG as `INFO: Functional check '{check_id}' fails pre-fix (expected)`
+   - If command succeeds: LOG as `INFO: Functional check '{check_id}' already passes pre-fix`
+   - If command produces stderr indicating missing binary/tool: ABORT with "Functional check '{check_id}' requires unavailable tool: {stderr}"
+4. **Validate parse_type compatibility**:
+   - `exit_code`: No additional validation needed
+   - `stdout`: `expected_output` must be set
+   - `boolean`: Output must be parseable as `true|false|0|1`
+
+If any ABORT condition is met: ABORT remediation with full error trace.
+
 #### Phase 0.4: CROSS-FIELD VALIDATION
 
 Validate referential integrity across goal fields:
@@ -178,7 +199,16 @@ MEASURE    → Run detection command, get current count
 STUCK-CHECK → Algorithmic stuck detection (see below)
     │
     ▼
-VERIFY     → If target reached → exit loop → Phase 4
+VERIFY     → If target reached AND no functional_checks → exit loop → Phase 4
+    │
+    ▼
+FUNCTIONAL → If target reached AND functional_checks present:
+    │         Run each check.command
+    │         If ANY blocking check fails → "false positive detection"
+    │           Record in achievement_verification.false_positive_flags[]
+    │           Continue to FIX (do not exit loop)
+    │         If ALL blocking checks pass → exit loop → Phase 4
+    │         Advisory check failures → LOG warning, do not block
     │
     ▼
 5-WHYS     → If stuck (3+ iterations) → Multi-perspective analysis
@@ -397,6 +427,30 @@ When stuck for multiple iterations, optionally consult Codex for problem-solving
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+
+## Achievement Recording with Functional Checks
+
+When a goal is achieved and `detection.functional_checks[]` was present:
+
+1. Set `achievement_verification.method` to `"detection_and_functional"`
+2. Record all functional check results in `achievement_verification.functional_check_results[]`:
+   ```json
+   {
+     "check_id": "{check_id}",
+     "passed": true,
+     "exit_code": 0,
+     "stdout": "{output}",
+     "severity": "blocking",
+     "timestamp": "{iso}"
+   }
+   ```
+3. If any `false_positive_flags` were recorded during the loop, include them in `achievement_verification.false_positive_flags[]`
+4. Set `achievement_verification.confidence` based on:
+   - All blocking checks passed, no false positives → `"high"`
+   - All blocking checks passed, some false positives during loop → `"medium"`
+   - Only advisory checks failed → `"medium"`
+
+When no `functional_checks` exist: behavior is unchanged (use existing `method` values).
 
 ## Safety Rules
 

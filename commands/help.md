@@ -32,7 +32,7 @@ You are executing the ACIS help system. This command dynamically discovers and d
    Output in this format:
    ```
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  ACIS v2.11.0 - Automated Code Improvement System                           ║
+   ║  ACIS v2.13.0 - Automated Code Improvement System                           ║
    ║  https://github.com/aivantage-consulting/claude-plugin-acis                 ║
    ╠══════════════════════════════════════════════════════════════════════════════╣
    ║                                                                              ║
@@ -93,6 +93,12 @@ You are executing the ACIS help system. This command dynamically discovers and d
    ║                            default                                           ║
    ║                            Example: /acis:pre-commit-review --advisory       ║
    ║                                                                              ║
+   ║  /acis:critical-review     Multi-perspective code health assessment          ║
+   ║                            T1 detection + agent analysis + health            ║
+   ║                            grades (A-F)                                      ║
+   ║                            Example: /acis:critical-review src/               ║
+   ║                                     --depth medium                           ║
+   ║                                                                              ║
    ║  /acis:audit               Process Auditor - analyze and improve ACIS        ║
    ║                            Extracts patterns into skills, routes             ║
    ║                            improvements                                      ║
@@ -135,9 +141,10 @@ You are executing the ACIS help system. This command dynamically discovers and d
    ║                                                                              ║
    ║  Brownfield Project (existing codebase):                                     ║
    ║    1. /acis:init                       <- Bootstrap with interview/docs      ║
-   ║    2. /acis:extract PR-{N}             <- Extract goals from PR review       ║
-   ║    3. /acis:remediate-parallel G1 G2   <- Fix issues in parallel             ║
-   ║    4. /acis:audit                      <- Learn from remediations            ║
+   ║    2. /acis:critical-review src/       <- Assess code health                 ║
+   ║    3. /acis:extract PR-{N}             <- Extract goals from PR review       ║
+   ║    4. /acis:remediate-parallel G1 G2   <- Fix issues in parallel             ║
+   ║    5. /acis:audit                      <- Learn from remediations            ║
    ║                                                                              ║
    ║  Feature Development:                                                        ║
    ║    1. /acis:discovery "topic"          <- Surface decisions                  ║
@@ -278,8 +285,9 @@ When presenting commands, use these display names:
 | `remediate-parallel.md` | `/acis:remediate-parallel` | Parallel remediation via worktrees |
 | `resolve.md` | `/acis:resolve` | Resolve pending decisions |
 | `verify.md` | `/acis:verify` | Run consensus verification |
+| `critical-review.md` | `/acis:critical-review` | Multi-perspective code health assessment |
 | `pre-commit-review.md` | `/acis:pre-commit-review` | Quick design review of staged changes |
-| `acis-audit.md` or `audit.md` | `/acis:audit` | Process Auditor |
+| `audit-process.md` | `/acis:audit-process` (or `/acis:audit`) | Process Auditor |
 | `feedback.md` | `/acis:feedback` | Report bugs, request features, give feedback |
 | `upgrade.md` | `/acis:upgrade` | Check for and install missing components |
 | `version.md` | `/acis:version` | Display installed plugin version |

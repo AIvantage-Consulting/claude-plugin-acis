@@ -25,6 +25,38 @@
 
 ---
 
+## Extraction Coverage
+
+Coverage verification for PR review → goal extraction completeness.
+
+### Per-PR Coverage
+
+| PR | Items in Review | Goals Extracted | Coverage | Status |
+|----|-----------------|-----------------|----------|--------|
+| #{PR_NUMBER} | {TOTAL_ITEMS} | {EXTRACTED_ITEMS} | {COVERAGE_PCT}% | {COMPLETE\|ACCEPTABLE\|INCOMPLETE\|CRITICAL} |
+
+### Extraction Gaps
+
+{IF_GAPS_EXIST}
+
+| Gap Item | Section | Classification | Original Severity |
+|----------|---------|----------------|-------------------|
+| {ITEM_DESCRIPTION} | {SOURCE_SECTION} | {missed_by_llm\|filtered_by_severity\|dedup_false_positive\|cross_section_missed} | {SEVERITY} |
+
+{END_IF}
+
+### Manual Intervention Indicators
+
+{IF_INTERVENTIONS_EXIST}
+
+| After Goal | Gap Duration | Indicator |
+|------------|-------------|-----------|
+| {GOAL_ID} | {MINUTES} min | {manual_intervention\|extraction_interruption} |
+
+{END_IF}
+
+---
+
 ## Goal Distribution
 
 ### By Category
@@ -127,6 +159,52 @@ Patterns that were evaluated but didn't meet all criteria.
 | Pattern | Frequency | Rejection Reason |
 |---------|-----------|------------------|
 | {pattern} | {N} | {criterion failed} |
+
+## Functional Verification Coverage
+
+Coverage analysis for replace/refactor goals with functional correctness checks.
+
+### Strategy-Based Coverage
+
+| Strategy | Total Goals | With Functional Checks | Grep-Only | Coverage |
+|----------|-------------|----------------------|-----------|----------|
+| replace | {REPLACE_TOTAL} | {REPLACE_WITH_FC} | {REPLACE_GREP_ONLY} | {REPLACE_COVERAGE}% |
+| refactor | {REFACTOR_TOTAL} | {REFACTOR_WITH_FC} | {REFACTOR_GREP_ONLY} | {REFACTOR_COVERAGE}% |
+| **Total** | **{FC_TOTAL}** | **{FC_WITH_CHECKS}** | **{FC_GREP_ONLY}** | **{FC_COVERAGE}%** |
+
+### Grep-Only Warnings (High Risk)
+
+Goals with `replace` or `refactor` strategy but no `functional_checks`. These rely solely on grep-based detection and may mark broken replacement code as "achieved".
+
+{IF_GREP_ONLY_EXIST}
+
+| Goal ID | Strategy | Detection Command | Risk |
+|---------|----------|-------------------|------|
+| {GOAL_ID} | {STRATEGY} | `{PRIMARY_COMMAND}` | Replacement may be broken but pass detection |
+
+{END_IF}
+
+{IF_NO_GREP_ONLY}
+All replace/refactor goals have functional checks. No grep-only verification gaps detected.
+{END_IF}
+
+### False Positive Detections Caught
+
+Instances where detection passed (old pattern removed) but functional checks revealed the replacement was broken.
+
+{IF_FALSE_POSITIVES_EXIST}
+
+| Goal ID | Iteration | Checks Failed | Notes |
+|---------|-----------|--------------|-------|
+| {GOAL_ID} | {ITERATION} | {FAILED_CHECK_IDS} | {NOTES} |
+
+**Impact**: These {FP_COUNT} false positives would have been incorrectly marked as "achieved" without functional verification.
+
+{END_IF}
+
+{IF_NO_FALSE_POSITIVES}
+No false positive detections during this audit period.
+{END_IF}
 
 ---
 

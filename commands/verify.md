@@ -49,6 +49,71 @@ for metric in $(echo "$metrics" | jq -c '.[]'); do
 done
 ```
 
+### Step 2.5: Run Functional Checks (if present)
+
+If the goal has `detection.functional_checks[]`:
+
+```bash
+functional_checks=$(echo "$goal" | jq -c '.detection.functional_checks // []')
+fc_count=$(echo "$functional_checks" | jq 'length')
+
+if [ "$fc_count" -gt 0 ]; then
+  echo "Running $fc_count functional correctness checks..."
+
+  fc_all_pass=true
+  fc_blocking_fail=false
+
+  for fc in $(echo "$functional_checks" | jq -c '.[]'); do
+    fc_id=$(echo "$fc" | jq -r '.check_id')
+    fc_cmd=$(echo "$fc" | jq -r '.command')
+    fc_parse=$(echo "$fc" | jq -r '.parse_type // "exit_code"')
+    fc_severity=$(echo "$fc" | jq -r '.severity // "blocking"')
+    fc_expected_exit=$(echo "$fc" | jq -r '.expected_exit_code // 0')
+    fc_expected_out=$(echo "$fc" | jq -r '.expected_output // ""')
+    fc_comparison=$(echo "$fc" | jq -r '.output_comparison // "eq"')
+
+    # Run functional check
+    fc_stdout=$(eval "$fc_cmd" 2>/tmp/fc_stderr)
+    fc_exit=$?
+    fc_stderr=$(cat /tmp/fc_stderr 2>/dev/null)
+
+    # Evaluate result based on parse_type
+    fc_passed=false
+    case "$fc_parse" in
+      "exit_code")
+        [ "$fc_exit" -eq "$fc_expected_exit" ] && fc_passed=true
+        ;;
+      "stdout")
+        case "$fc_comparison" in
+          "eq")           [ "$fc_stdout" = "$fc_expected_out" ] && fc_passed=true ;;
+          "contains")     echo "$fc_stdout" | grep -qF "$fc_expected_out" && fc_passed=true ;;
+          "not_contains") ! echo "$fc_stdout" | grep -qF "$fc_expected_out" && fc_passed=true ;;
+          "regex_match")  echo "$fc_stdout" | grep -qE "$fc_expected_out" && fc_passed=true ;;
+        esac
+        ;;
+      "boolean")
+        [ "$fc_stdout" = "true" ] || [ "$fc_stdout" = "1" ] && fc_passed=true
+        ;;
+    esac
+
+    if [ "$fc_passed" = true ]; then
+      echo "$fc_id|PASS|$fc_severity"
+    else
+      echo "$fc_id|FAIL|$fc_severity"
+      fc_all_pass=false
+      [ "$fc_severity" = "blocking" ] && fc_blocking_fail=true
+    fi
+  done
+
+  # A blocking functional check failure means the goal is NOT verified
+  if [ "$fc_blocking_fail" = true ]; then
+    echo "FUNCTIONAL_CHECK_BLOCKING_FAIL"
+  fi
+fi
+```
+
+**Blocking functional check failure = goal NOT verified**, regardless of detection command results. Advisory failures are logged as warnings but do not block verification.
+
 ### Step 3: Launch Verification Agents (Parallel)
 
 All verification agents run **simultaneously**:
@@ -167,6 +232,17 @@ else:
 ║  │ Test coverage          │ ≥80%     │ 92%      │ ✅ PASS │                 ║
 ║  │ Type errors            │ 0        │ 0        │ ✅ PASS │                 ║
 ║  └────────────────────────┴──────────┴──────────┴─────────┘                 ║
+║                                                                              ║
+║  🔧 FUNCTIONAL CHECKS {IF_FUNCTIONAL_CHECKS_PRESENT}                        ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  ┌──────────────────────────┬──────────┬──────────┐                         ║
+║  │ Check                    │ Severity │ Status   │                         ║
+║  ├──────────────────────────┼──────────┼──────────┤                         ║
+║  │ {check_description}      │ blocking │ ✅ PASS  │                         ║
+║  │ {check_description}      │ advisory │ ⚠️ FAIL  │                         ║
+║  └──────────────────────────┴──────────┴──────────┘                         ║
+║  {END_IF}                                                                    ║
 ║                                                                              ║
 ║  👥 AGENT VERDICTS                                                           ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║

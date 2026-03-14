@@ -1,0 +1,297 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "critical-review-findings.schema.json",
+  "title": "ACIS Critical Review Findings",
+  "description": "Schema for /acis:critical-review output — health scores, findings, correlation, and comparison data",
+  "type": "object",
+  "required": ["review_id", "scope", "health_scores", "findings", "metadata"],
+  "properties": {
+    "review_id": {
+      "type": "string",
+      "description": "Unique review identifier (e.g., REVIEW-2026-03-03-src-services)",
+      "pattern": "^REVIEW-[0-9]{4}-[0-9]{2}-[0-9]{2}-.+$"
+    },
+    "scope": {
+      "type": "object",
+      "required": ["type", "files", "lines_of_code"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["file", "directory", "module", "topic", "project"],
+          "description": "How the scope was resolved"
+        },
+        "original_argument": {
+          "type": "string",
+          "description": "The raw argument passed to /acis:critical-review"
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Resolved file list"
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lines_of_code": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total LOC in scope (for density calculation)"
+        }
+      }
+    },
+    "depth": {
+      "type": "string",
+      "enum": ["shallow", "medium", "deep"],
+      "default": "medium",
+      "description": "Analysis depth used"
+    },
+    "health_scores": {
+      "type": "object",
+      "required": ["overall"],
+      "properties": {
+        "overall": {
+          "$ref": "#/definitions/health_grade"
+        },
+        "per_lens": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/health_grade"
+          },
+          "description": "Health grade per assessment lens (keyed by lens id)"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/finding"
+      },
+      "description": "All findings from T1 detection + agent analysis"
+    },
+    "correlation": {
+      "type": "object",
+      "description": "Cross-perspective correlation results (only at depth medium/deep)",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "finding_ids": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "perspectives": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "escalated": { "type": "boolean" },
+              "escalation_reason": { "type": "string" }
+            }
+          }
+        },
+        "keyword_escalations": {
+          "type": "integer",
+          "description": "Count of findings escalated via security keyword detection"
+        },
+        "security_keywords_matched": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Security keywords that triggered escalation"
+        }
+      }
+    },
+    "positive_patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": { "type": "string" },
+          "description": { "type": "string" },
+          "lens": { "type": "string" },
+          "files": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "Good practices observed during analysis"
+    },
+    "comparison": {
+      "type": "object",
+      "description": "Delta comparison against a previous review (only with --compare)",
+      "properties": {
+        "previous_review_id": { "type": "string" },
+        "previous_date": { "type": "string", "format": "date" },
+        "trend": {
+          "type": "string",
+          "enum": ["improving", "stable", "degrading"]
+        },
+        "overall_delta": {
+          "type": "object",
+          "properties": {
+            "previous_grade": { "type": "string" },
+            "current_grade": { "type": "string" },
+            "previous_density": { "type": "number" },
+            "current_density": { "type": "number" }
+          }
+        },
+        "per_lens_delta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "previous_grade": { "type": "string" },
+              "current_grade": { "type": "string" },
+              "trend": {
+                "type": "string",
+                "enum": ["improving", "stable", "degrading"]
+              }
+            }
+          }
+        },
+        "new_findings": { "type": "integer" },
+        "resolved_findings": { "type": "integer" },
+        "persistent_findings": { "type": "integer" }
+      }
+    },
+    "goals_generated": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "goal_id": { "type": "string" },
+          "file_path": { "type": "string" },
+          "severity": { "type": "string" },
+          "finding_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "Goal files generated (only with --generate-goals)"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["acis_version", "created_at"],
+      "properties": {
+        "acis_version": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "depth": {
+          "type": "string",
+          "enum": ["shallow", "medium", "deep"]
+        },
+        "lenses_used": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "agents_consulted": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "codex_used": { "type": "boolean" },
+        "flags": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "definitions": {
+    "health_grade": {
+      "type": "object",
+      "required": ["grade", "density"],
+      "properties": {
+        "grade": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D", "F"],
+          "description": "A (0-5/kLOC), B (6-15), C (16-30), D (31-60), F (61+)"
+        },
+        "density": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Weighted finding density per 1000 lines of code"
+        },
+        "weighted_score": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Sum of severity weights for this lens"
+        },
+        "finding_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "breakdown": {
+          "type": "object",
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["finding_id", "lens", "severity", "description", "source"],
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "description": "Unique finding identifier (e.g., F-SEC-001)"
+        },
+        "lens": {
+          "type": "string",
+          "description": "Assessment lens that surfaced this finding"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "original_severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Severity before any escalation"
+        },
+        "description": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "source": {
+          "type": "string",
+          "enum": ["t1-pattern", "agent-internal", "agent-codex"],
+          "description": "How this finding was detected"
+        },
+        "pattern_id": {
+          "type": "string",
+          "description": "T1 pattern ID if source is t1-pattern"
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Agent that surfaced this finding (if agent source)"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file"],
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "match_text": { "type": "string" }
+            }
+          }
+        },
+        "escalation_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags from cross-perspective escalation"
+        },
+        "perspectives": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Perspectives that independently surfaced this finding"
+        }
+      }
+    }
+  }
+}

@@ -2211,7 +2211,7 @@ ACIS enforces CLAUDE.md safety rules:
 |------|---------|
 | `commands/acis.md` | Main ACIS slash command definition |
 | `commands/acis-init.md` | Project bootstrapping command |
-| `commands/acis-audit.md` | Process Auditor command |
+| `commands/audit-process.md` | Process Auditor command |
 | `schemas/acis-goal.schema.json` | Goal schema |
 | `schemas/acis-decision-manifest.schema.json` | Manifest schema |
 | `schemas/acis-decision.schema.json` | Decision schema |
