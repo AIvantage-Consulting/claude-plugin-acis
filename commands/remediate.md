@@ -53,6 +53,22 @@ Phase 4.5: QUALITY-GATE       Codex reviews cumulative changes (SOLID+DRY)
 ```
 
 
+
+#### Phase 0 PRE-CHECK: REJECTED GOAL GUARD (v2.15)
+
+Before any processing, check if the goal has been rejected by the challenge phase:
+
+```bash
+goal_status=$(jq -r '.progress.status // "pending"' "${goal_file}")
+if [ "$goal_status" = "rejected" ]; then
+  echo "SKIPPED: Goal $(jq -r '.id' "${goal_file}") has status 'rejected' (challenge phase)."
+  echo "  Technical: $(jq -r '.challenge.technical_reasoning // "N/A"' "${goal_file}")"
+  echo "  Strategic: $(jq -r '.challenge.strategic_reasoning // "N/A"' "${goal_file}")"
+  echo "  To re-evaluate: re-run /acis extract with --skip-challenge to bypass, or wait for /acis challenge-review (future v2.16+)."
+  exit 0
+fi
+```
+
 #### Phase 0.0: LEGACY MIGRATION (v2.14)
 
 Before any processing, detect and migrate legacy goal files to v2.14 schema:

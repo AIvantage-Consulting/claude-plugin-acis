@@ -618,7 +618,8 @@
             "achieved",
             "blocked",
             "deferred",
-            "verified_acceptable"
+            "verified_acceptable",
+            "rejected"
           ]
         },
         "current_phase": {
@@ -1394,9 +1395,207 @@
     "schema_version": {
       "type": "string",
       "enum": [
-        "2.14"
+        "2.14",
+        "2.15"
       ],
       "description": "Goal schema version. Absent = legacy goal requiring migration."
+    },
+    "challenge": {
+      "type": "object",
+      "description": "Results from the Comment Challenge phase (Step 5.5). Optional \u2014 absent for pre-v2.15 goals or when --skip-challenge is used.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unchallenged",
+            "accepted",
+            "downgraded",
+            "low_roi",
+            "rejected"
+          ],
+          "description": "Final merged verdict from both challengers"
+        },
+        "original_severity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Severity before any challenge downgrade"
+        },
+        "technical_verdict": {
+          "type": "string",
+          "enum": [
+            "accept",
+            "downgrade",
+            "low_roi",
+            "reject"
+          ]
+        },
+        "technical_reasoning": {
+          "type": "string"
+        },
+        "strategic_verdict": {
+          "type": "string",
+          "enum": [
+            "accept",
+            "downgrade",
+            "low_roi",
+            "reject"
+          ]
+        },
+        "strategic_reasoning": {
+          "type": "string"
+        },
+        "roi_analysis": {
+          "type": "object",
+          "properties": {
+            "estimated_effort": {
+              "type": "string"
+            },
+            "estimated_impact": {
+              "type": "string"
+            },
+            "tech_debt_factor": {
+              "type": "string"
+            },
+            "recommendation": {
+              "type": "string"
+            }
+          }
+        },
+        "persona_impact": {
+          "type": "object",
+          "properties": {
+            "impacts_target_users": {
+              "type": "boolean"
+            },
+            "affected_personas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "contradictions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Goal IDs that contradict this goal"
+        },
+        "investigation_depth": {
+          "type": "string",
+          "enum": [
+            "light",
+            "deep",
+            "skipped"
+          ]
+        },
+        "challenged_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "Merged dimension assessments from both challengers",
+          "properties": {
+            "factual_accuracy": {
+              "type": "object",
+              "properties": {
+                "passed": {
+                  "type": "boolean"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            },
+            "codebase_awareness": {
+              "type": "object",
+              "properties": {
+                "passed": {
+                  "type": "boolean"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "is_intentional": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "contradictions": {
+              "type": "object",
+              "properties": {
+                "found": {
+                  "type": "boolean"
+                },
+                "conflicting_goal_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            },
+            "architecture_alignment": {
+              "type": "object",
+              "properties": {
+                "aligned": {
+                  "type": "boolean"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            },
+            "cost_benefit": {
+              "type": "object",
+              "properties": {
+                "roi_rating": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low",
+                    "negligible"
+                  ]
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            },
+            "persona_impact": {
+              "type": "object",
+              "properties": {
+                "impacts_target_users": {
+                  "type": "boolean"
+                },
+                "affected_personas": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

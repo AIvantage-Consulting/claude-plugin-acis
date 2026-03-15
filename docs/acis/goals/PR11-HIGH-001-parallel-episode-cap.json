@@ -1,0 +1,86 @@
+{
+  "id": "PR11-HIGH-001-parallel-episode-cap",
+  "source": {
+    "origin": "pr-review",
+    "pr_number": 11,
+    "lens": "architecture",
+    "severity": "high",
+    "original_comment": "The episode recording logic in remediate-parallel.md adds a new episode on every step but lacks a mechanism to cap the array size. The schema specifies maxItems: 10. Without a check, this will produce a goal file that violates the schema."
+  },
+  "detection": {
+    "primary_command": "grep -B2 -A15 'EPISODE RECORDING' commands/remediate-parallel.md | grep -c 'ge 10\\|maxItems\\|iteration_episodes\\[1:\\]' | tr -d ' '",
+    "pattern": "episode recording without maxItems guard",
+    "search_paths": [
+      "commands/"
+    ],
+    "verifiable_metrics": [
+      {
+        "metric_id": "missing_episode_cap",
+        "name": "Episode recording blocks without size cap",
+        "command": "python3 -c \"content=open('commands/remediate-parallel.md').read(); idx=content.find('EPISODE RECORDING'); block=content[idx:idx+800]; print(0 if 'ge 10' in block or '[1:]' in block else 1)\"",
+        "expected_value": 0,
+        "tolerance": 0,
+        "parse_type": "integer",
+        "comparison": "eq",
+        "verification_notes": "The episode recording section must include a size guard before appending"
+      }
+    ]
+  },
+  "target": {
+    "type": "zero",
+    "primary_metric": "missing_episode_cap"
+  },
+  "verification": {
+    "command": "grep -A20 'EPISODE RECORDING' commands/remediate-parallel.md | grep -c 'ge 10'",
+    "success_condition": "output >= 1",
+    "parse_output": "count"
+  },
+  "multi_perspective": {
+    "discovery_agents": [],
+    "verification_agents": [],
+    "consensus_threshold": 0.75
+  },
+  "behavioral": {
+    "enabled": false
+  },
+  "consensus": {
+    "enabled": false
+  },
+  "complexity": {
+    "tier": 1,
+    "reasoning": "Simple addition of size guard before episode append"
+  },
+  "remediation": {
+    "strategy": "add",
+    "replacement": "Add episode cap check: if episode_count >= 10, remove oldest before appending",
+    "guidance": "Add before episode_id assignment: if [ \"$episode_count\" -ge 10 ]; then jq '.progress.iteration_episodes = .progress.iteration_episodes[1:]' ... fi"
+  },
+  "schema_version": "2.14",
+  "progress": {
+    "status": "pending",
+    "iterations": 0,
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
+  },
+  "metadata": {
+    "created_at": "2026-03-15T03:10:15Z",
+    "updated_at": "2026-03-15T03:10:15Z",
+    "tags": [
+      "pr-11",
+      "architecture",
+      "high",
+      "schema-violation"
+    ]
+  }
+}

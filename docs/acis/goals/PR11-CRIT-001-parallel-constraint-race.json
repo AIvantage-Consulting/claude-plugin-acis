@@ -1,0 +1,86 @@
+{
+  "id": "PR11-CRIT-001-parallel-constraint-race",
+  "source": {
+    "origin": "pr-review",
+    "pr_number": 11,
+    "lens": "architecture",
+    "severity": "critical",
+    "original_comment": "The logic for sharing constraints between parallel worktrees has a critical race condition. The script reads the shared constraints file, modifies it in memory, and writes it back. If multiple parallel processes execute this section concurrently, they can overwrite each other's changes, leading to lost constraint data."
+  },
+  "detection": {
+    "primary_command": "grep -n 'batch_constraints_file' commands/remediate-parallel.md | grep -v 'flock\\|lockfile\\|lock_dir' | wc -l | tr -d ' '",
+    "pattern": "read-modify-write without file locking",
+    "search_paths": [
+      "commands/"
+    ],
+    "verifiable_metrics": [
+      {
+        "metric_id": "unlocked_constraint_writes",
+        "name": "Constraint file writes without locking",
+        "command": "grep -c 'batch_constraints_file' commands/remediate-parallel.md | tr -d ' '",
+        "expected_value": 0,
+        "tolerance": 0,
+        "parse_type": "integer",
+        "comparison": "eq",
+        "verification_notes": "After fix, all constraint file accesses should use flock or lock directory"
+      }
+    ]
+  },
+  "target": {
+    "type": "zero",
+    "primary_metric": "unlocked_constraint_writes"
+  },
+  "verification": {
+    "command": "grep -c 'flock\\|lock_dir' commands/remediate-parallel.md | tr -d ' '",
+    "success_condition": "output >= 1",
+    "parse_output": "count"
+  },
+  "multi_perspective": {
+    "discovery_agents": [],
+    "verification_agents": [],
+    "consensus_threshold": 0.75
+  },
+  "behavioral": {
+    "enabled": false
+  },
+  "consensus": {
+    "enabled": false
+  },
+  "complexity": {
+    "tier": 2,
+    "reasoning": "Requires adding file locking mechanism to existing read-modify-write pattern"
+  },
+  "remediation": {
+    "strategy": "refactor",
+    "replacement": "Add flock or lock directory around constraint file read-modify-write operations",
+    "guidance": "Wrap the constraint sharing read-modify-write in: exec 200>\"${batch_constraints_file}.lock\"; flock 200; ...operations...; flock -u 200"
+  },
+  "schema_version": "2.14",
+  "progress": {
+    "status": "pending",
+    "iterations": 0,
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
+  },
+  "metadata": {
+    "created_at": "2026-03-15T03:10:15Z",
+    "updated_at": "2026-03-15T03:10:15Z",
+    "tags": [
+      "pr-11",
+      "architecture",
+      "critical",
+      "race-condition"
+    ]
+  }
+}

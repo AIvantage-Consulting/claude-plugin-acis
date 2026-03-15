@@ -1,0 +1,86 @@
+{
+  "id": "PR11-MED-001-details-string-overwrite",
+  "source": {
+    "origin": "pr-review",
+    "pr_number": 11,
+    "lens": "maintainability",
+    "severity": "medium",
+    "original_comment": "The logic for determining the complexity details is flawed. Rules are evaluated sequentially and the details variable is overwritten by later rules, losing context from earlier ones. Rule 4 unconditionally appends a semicolon which can lead to a leading semicolon if no prior details were set."
+  },
+  "detection": {
+    "primary_command": "grep -c 'details=\"Search\\|details=\"Verifiable\\|details=\"${details}' commands/extract.md | tr -d ' '",
+    "pattern": "details variable overwrite instead of accumulate",
+    "search_paths": [
+      "commands/"
+    ],
+    "verifiable_metrics": [
+      {
+        "metric_id": "details_overwrite_count",
+        "name": "Lines where details is overwritten instead of accumulated",
+        "command": "grep -c 'details=\"Search\\|details=\"Verifiable' commands/extract.md | tr -d ' '",
+        "expected_value": 0,
+        "tolerance": 0,
+        "parse_type": "integer",
+        "comparison": "eq",
+        "verification_notes": "After fix, details should use accumulation pattern: details=\"${details:+$details; }new detail\""
+      }
+    ]
+  },
+  "target": {
+    "type": "zero",
+    "primary_metric": "details_overwrite_count"
+  },
+  "verification": {
+    "command": "grep -c '${details:+' commands/extract.md | tr -d ' '",
+    "success_condition": "output >= 2",
+    "parse_output": "count"
+  },
+  "multi_perspective": {
+    "discovery_agents": [],
+    "verification_agents": [],
+    "consensus_threshold": 0.75
+  },
+  "behavioral": {
+    "enabled": false
+  },
+  "consensus": {
+    "enabled": false
+  },
+  "complexity": {
+    "tier": 1,
+    "reasoning": "Simple string accumulation pattern fix"
+  },
+  "remediation": {
+    "strategy": "replace",
+    "replacement": "Use accumulation: details=\"${details:+$details; }New detail\"",
+    "guidance": "Replace each details= assignment (except the first) with accumulation pattern using ${details:+$details; } prefix"
+  },
+  "schema_version": "2.14",
+  "progress": {
+    "status": "pending",
+    "iterations": 0,
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
+  },
+  "metadata": {
+    "created_at": "2026-03-15T03:10:15Z",
+    "updated_at": "2026-03-15T03:10:15Z",
+    "tags": [
+      "pr-11",
+      "maintainability",
+      "medium",
+      "string-accumulation"
+    ]
+  }
+}

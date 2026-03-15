@@ -705,6 +705,199 @@ For each quantifiable issue, create a goal file:
 }
 ```
 
+
+
+### Step 5.5: COMMENT CHALLENGE (v2.15)
+
+Two independent challenger agents evaluate each extracted goal before baseline measurement. This prevents blind acceptance of review comments by critically assessing factual accuracy, codebase awareness, contradictions, architecture alignment, cost-benefit ROI, and persona impact.
+
+Skip with `--skip-challenge`. Force deep investigation on all goals with `--deep-challenge`.
+
+#### Step 5.5.0: Skip Conditions
+
+Skip this step entirely if ANY of:
+- `--skip-challenge` flag is set
+- `--dry-run` flag is set (challengers are heavyweight; dry-run should be fast)
+
+If skipped, set `challenge.status = "unchallenged"` and `challenge.investigation_depth = "skipped"` on each goal:
+
+```bash
+for goal_file in "$goals_dir"/PR${pr_number}-*.json; do
+  jq '.challenge = {"status": "unchallenged", "investigation_depth": "skipped"}' \
+    "$goal_file" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "$goal_file"
+done
+```
+
+#### Step 5.5.1: Determine Investigation Depth
+
+For each goal, determine investigation depth based on the ESCALATED severity (post-Step 4.5):
+
+```bash
+determine_depth() {
+  local goal_file="$1"
+  local force_deep="$2"  # "true" if --deep-challenge
+
+  if [ "$force_deep" = "true" ]; then
+    echo "deep"
+    return
+  fi
+
+  local severity=$(jq -r '.source.severity' "$goal_file")
+  local tier=$(jq -r '.complexity.tier // 1' "$goal_file")
+
+  if [ "$severity" = "critical" ] || [ "$severity" = "high" ]; then
+    echo "deep"
+  elif [ "$tier" -ge 2 ]; then
+    echo "deep"
+  else
+    echo "light"
+  fi
+}
+```
+
+#### Step 5.5.2: Launch Challengers (Parallel)
+
+For each goal file, launch BOTH challengers simultaneously:
+
+```
+Technical Challenger:
+  Task(
+    prompt="Challenge this goal for technical validity.
+      Goal: @{goal_file}
+      All Goals: @{goals_dir}/PR{N}-*.json
+      Investigation depth: {light|deep}
+      Return: challenge-result.schema.json format",
+    subagent_type="acis-technical-challenger"
+  )
+
+Strategic Challenger:
+  Task(
+    prompt="Challenge this goal for strategic value.
+      Goal: @{goal_file}
+      All Goals: @{goals_dir}/PR{N}-*.json
+      Config: @.acis-config.json
+      Investigation depth: {light|deep}
+      Return: challenge-result.schema.json format",
+    subagent_type="acis-strategic-challenger"
+  )
+```
+
+Both agents return `challenge-result.schema.json`-conformant JSON. Each populates only its own dimensions (technical: factual_accuracy, codebase_awareness, contradictions, architecture_alignment; strategic: cost_benefit, persona_impact).
+
+#### Step 5.5.3: Merge Verdicts
+
+Apply the verdict precedence table. **REJECT requires unanimous agreement; any dissent preserves the goal.**
+
+| Technical | Strategic | Result |
+|-----------|-----------|--------|
+| ACCEPT | ACCEPT | ACCEPT |
+| ACCEPT | DOWNGRADE | DOWNGRADE |
+| ACCEPT | LOW-ROI | LOW-ROI |
+| ACCEPT | REJECT | LOW-ROI |
+| DOWNGRADE | ACCEPT | DOWNGRADE |
+| DOWNGRADE | DOWNGRADE | DOWNGRADE (take lower severity) |
+| DOWNGRADE | LOW-ROI | LOW-ROI |
+| DOWNGRADE | REJECT | DOWNGRADE |
+| LOW-ROI | ACCEPT | LOW-ROI |
+| LOW-ROI | DOWNGRADE | LOW-ROI |
+| LOW-ROI | LOW-ROI | LOW-ROI |
+| LOW-ROI | REJECT | LOW-ROI |
+| REJECT | ACCEPT | LOW-ROI |
+| REJECT | DOWNGRADE | DOWNGRADE |
+| REJECT | LOW-ROI | LOW-ROI |
+| REJECT | REJECT | REJECT (unanimous) |
+
+When merging dimensions, combine both challengers' dimension objects:
+```bash
+merged_dimensions=$(echo "$tech_result" "$strat_result" | jq -s '.[0].dimensions + .[1].dimensions')
+```
+
+#### Step 5.5.4: Apply Verdicts
+
+For each goal, based on merged verdict:
+
+**ACCEPT**: No changes to goal. Record challenge data.
+
+```bash
+jq '.challenge.status = "accepted"' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+**DOWNGRADE**:
+1. Record `challenge.original_severity` = current severity
+2. Update `source.severity` to the lower of the two suggested severities
+3. Add tag `challenger-downgraded`
+
+```bash
+jq --arg orig_sev "$current_severity" --arg new_sev "$lower_severity" \
+  '.challenge.status = "downgraded" |
+   .challenge.original_severity = $orig_sev |
+   .source.severity = $new_sev |
+   .metadata.tags += ["challenger-downgraded"]' \
+  "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+**LOW-ROI**:
+1. Record `challenge.roi_analysis` and `challenge.persona_impact` from strategic challenger
+2. Add tag `challenger-low-roi`
+3. Goal is KEPT — surfaced in extraction report for user awareness
+
+```bash
+jq --argjson roi "$roi_json" --argjson persona "$persona_json" \
+  '.challenge.status = "low_roi" |
+   .challenge.roi_analysis = $roi |
+   .challenge.persona_impact = $persona |
+   .metadata.tags += ["challenger-low-roi"]' \
+  "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+**REJECT** (unanimous):
+- If severity is **critical/high** → SAFETY GATE (prompt user):
+
+```
+CHALLENGE GATE: Both challengers recommend REJECT for {goal_id} (severity: {severity})
+  Technical: {technical_reasoning}
+  Strategic: {strategic_reasoning}
+  Confirm rejection? [R]eject / [K]eep / [D]owngrade
+```
+
+User decision overrides the challengers.
+
+- If severity is **medium/low** → Auto-reject:
+
+```bash
+jq '.progress.status = "rejected" |
+    .challenge.status = "rejected" |
+    .metadata.tags += ["challenger-rejected"]' \
+  "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+Goal file is KEPT on disk (not deleted) for future re-scan.
+
+#### Step 5.5.5: Record Challenge Results
+
+For each goal, write the merged challenge data:
+
+```bash
+jq --arg status "$merged_verdict" \
+   --arg tech_v "$tech_verdict" --arg tech_r "$tech_reasoning" \
+   --arg strat_v "$strat_verdict" --arg strat_r "$strat_reasoning" \
+   --arg depth "$investigation_depth" \
+   --argjson dims "$merged_dimensions" \
+  '.challenge += {
+    "status": $status,
+    "technical_verdict": $tech_v,
+    "technical_reasoning": $tech_r,
+    "strategic_verdict": $strat_v,
+    "strategic_reasoning": $strat_r,
+    "investigation_depth": $depth,
+    "challenged_at": (now | todate)
+  } | .challenge.dimensions = $dims' \
+  "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+Include `roi_analysis`, `persona_impact`, and `contradictions` when present in challenger results.
+
+
 ### Step 6: Validate & Measure Baselines
 
 #### Step 6.1: Detection Command Dry-Run Validation
@@ -827,9 +1020,13 @@ total_items=$(jq -r 'length' /tmp/acis-extracted-items-PR${pr_number}.json 2>/de
 # Count generated goal files
 generated_goals=$(find "$goals_dir" -name "PR${pr_number}-*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
 
+# Adjust for challenged rejections (v2.15)
+rejected_count=$(find "$goals_dir" -name "PR${pr_number}-*.json" -exec jq -r 'select(.progress.status == "rejected") | .id' {} \; 2>/dev/null | wc -l | tr -d ' ')
+effective_goals=$((generated_goals - rejected_count))
+
 # Compute coverage percentage (Bash 3.2 integer arithmetic)
 if [ "$total_items" -gt 0 ]; then
-  coverage_pct=$((generated_goals * 100 / total_items))
+  coverage_pct=$((effective_goals * 100 / total_items))
 else
   coverage_pct=100
 fi
@@ -845,6 +1042,7 @@ For items that were identified but have no corresponding goal file, classify the
 | `detection_invalid` | Detection command failed dry-run validation in Step 6.1 |
 | `severity_filtered` | Item was filtered out by `--severity` flag |
 | `generation_error` | Goal file generation failed (JSON error, missing fields) |
+| `challenged_rejected` | Goal rejected by unanimous challenger verdict (v2.15) |
 
 ```bash
 # Build unmatched items list
@@ -969,6 +1167,29 @@ Output summary:
 ║                                                                              ║
 ║  (Sorted by severity: critical → high → medium → low)                        ║
 ║                                                                              ║
+║  COMMENT CHALLENGE RESULTS: {challenged_count}                               ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║                                                                              ║
+║  ┌─────────────────────────────────┬──────────┬──────────┬─────────────────┐ ║
+║  │ Goal ID                         │ Technical│ Strategic│ Final Verdict   │ ║
+║  ├─────────────────────────────────┼──────────┼──────────┼─────────────────┤ ║
+║  │ {goal_id}                       │ {t_verd} │ {s_verd} │ {final_verdict} │ ║
+║  └─────────────────────────────────┴──────────┴──────────┴─────────────────┘ ║
+║                                                                              ║
+║  Accepted: {N}  Downgraded: {N}  Low-ROI: {N}  Rejected: {N}                ║
+║                                                                              ║
+║  LOW-ROI ITEMS (review recommended):                                         ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║  {goal_id}                                                                   ║
+║    ROI: effort={effort}, impact={impact}                                     ║
+║    Tech debt: {tech_debt_factor}                                             ║
+║    Persona impact: {persona_notes}                                           ║
+║                                                                              ║
+║  REJECTED ITEMS: {rejected_count}                                            ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║  {goal_id}: {technical_reasoning} / {strategic_reasoning}                    ║
+║                                                                              ║
+║                                                                              ║
 ║  🔗 CROSS-SECTION CORRELATIONS: {correlation_count}                          ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
 ║                                                                              ║
@@ -1072,6 +1293,9 @@ Output summary:
 | `--ttl-override N` | Override TTL days for all confidence levels |
 | `--update-registry` | Prompt to add new items to known-resolutions.json |
 | `--recheck-blocked` | Include previously blocked goals for re-attempt |
+| **Challenge Flags** | |
+| `--skip-challenge` | Skip Step 5.5 comment challenge (trust reviewer completely) |
+| `--deep-challenge` | Force deep investigation on ALL goals (not just critical/high) |
 
 ### Default Behavior (No Flags)
 
