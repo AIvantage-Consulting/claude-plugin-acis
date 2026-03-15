@@ -11,11 +11,21 @@ Apply a targeted fix for a specific goal, based on:
 
 ## Context You Receive
 
-You are spawned with injected context:
-- **Goal file**: The goal JSON with target, detection command
+You are spawned with injected context (v2.14 — Kernel/Worker Split):
+- **Tactical Brief** (PRIMARY): Focused context built by orchestrator containing:
+  - `goal_id`, `target`: What to achieve
+  - `current_iteration`: Which iteration this is
+  - `recent_episodes`: Last 3 episodic memory entries (what was tried, what worked/failed)
+  - `active_constraints`: All constraints that MUST be satisfied (from T5)
+  - `recent_5whys`: Latest root cause analysis (if any)
+  - `focus_files`: Cumulative list of files modified so far
+  - `next_action`: Recommended next step from previous iteration
+- **Goal file** (FALLBACK): Full goal JSON — use only if tactical brief is insufficient
 - **STATE.md**: Global position, accumulated decisions
 - **Progress file**: Previous iterations for this goal
 - **Discovery file**: Multi-perspective recommendations
+
+**Priority**: Read tactical brief FIRST. Only fall back to full goal file for detection commands, metric definitions, or strategy details not in the brief.
 
 ## Workflow
 
@@ -47,6 +57,32 @@ Always apply 5 Whys if fix isn't obvious:
   WHY-4: Why?
   WHY-5: ROOT CAUSE
 ```
+
+
+### 2.5. Constraint Compliance Check (v2.14 — T5: Constraint Propagation)
+
+Before executing any fix, verify compliance with ALL active architectural constraints:
+
+```
+Read active_constraints from tactical brief (or goal.progress.architectural_constraints[]):
+
+For each constraint where status == "active":
+  1. Check must_do[]: Verify planned fix includes these requirements
+  2. Check must_not[]: Verify planned fix does NOT violate these prohibitions
+  3. Check affected_files[]: If fix touches these files, constraint is relevant
+
+If ANY constraint would be violated:
+  - DO NOT proceed with fix
+  - Report constraint_id and violation in return
+  - Suggest alternative approach that respects constraints
+  - Return result: "blocked" with constraint details
+
+If ALL constraints satisfied:
+  - Proceed to Step 3 (Execute Fix)
+  - Record which constraints were checked in episode_contribution
+```
+
+**FORBIDDEN**: Ignoring active constraints. Constraints exist because previous iterations discovered them the hard way.
 
 ### 3. Execute Fix (30% budget)
 
@@ -85,9 +121,22 @@ Return structured result for progress file:
     "why5": "...",
     "rootCause": "...",
     "fixPlan": "..."
+  },
+  "episode_contribution": {
+    "approach_summary": "Concise description of approach taken (min 10 chars)",
+    "constraints_checked": ["ac-001", "ac-002"],
+    "constraints_violated": [],
+    "new_constraints_discovered": [
+      "Files in packages/mobile/ must import from @foundation, not directly"
+    ],
+    "next_recommendation": "Focus on remaining files in packages/web/ using same pattern",
+    "metric_before": 12,
+    "metric_after": 7
   }
 }
 ```
+
+The `episode_contribution` field provides data for the orchestrator's EPISODE-SYNTHESIS step (T1).
 
 ## Context Budget Discipline
 

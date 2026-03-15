@@ -3,7 +3,14 @@
   "title": "ACIS Progress",
   "description": "Per-goal iteration history for fresh-agent continuation (.acis/progress/{goal-id}.json)",
   "type": "object",
-  "required": ["goalId", "iterations", "currentMeasurement"],
+  "required": [
+    "goalId",
+    "iterations",
+    "currentMeasurement",
+    "iterationEpisodes",
+    "architecturalConstraints",
+    "complexityEvidence"
+  ],
   "properties": {
     "goalId": {
       "type": "string",
@@ -22,7 +29,13 @@
       "description": "History of fix iterations (read by fresh agents)",
       "items": {
         "type": "object",
-        "required": ["number", "agentType", "action", "result", "contextUsed"],
+        "required": [
+          "number",
+          "agentType",
+          "action",
+          "result",
+          "contextUsed"
+        ],
         "properties": {
           "number": {
             "type": "integer",
@@ -38,11 +51,18 @@
           },
           "filesModified": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
           "result": {
             "type": "string",
-            "enum": ["success", "partial", "blocked", "failed"]
+            "enum": [
+              "success",
+              "partial",
+              "blocked",
+              "failed"
+            ]
           },
           "commit": {
             "type": "string",
@@ -66,16 +86,41 @@
     "currentMeasurement": {
       "type": "object",
       "description": "Latest measurement from detection command",
-      "required": ["command", "currentValue", "targetValue", "status"],
+      "required": [
+        "command",
+        "currentValue",
+        "targetValue",
+        "status"
+      ],
       "properties": {
-        "command": { "type": "string" },
-        "currentValue": { "type": ["string", "number"] },
-        "targetValue": { "type": ["string", "number"] },
+        "command": {
+          "type": "string"
+        },
+        "currentValue": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "targetValue": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
         "status": {
           "type": "string",
-          "enum": ["achieved", "not-achieved", "error", "pending"]
+          "enum": [
+            "achieved",
+            "not-achieved",
+            "error",
+            "pending"
+          ]
         },
-        "measuredAt": { "type": "string", "format": "date-time" }
+        "measuredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "fiveWhysAnalyses": {
@@ -83,17 +128,39 @@
       "description": "5 Whys analyses performed during iterations",
       "items": {
         "type": "object",
-        "required": ["iteration", "problem", "rootCause"],
+        "required": [
+          "iteration",
+          "problem",
+          "rootCause"
+        ],
         "properties": {
-          "iteration": { "type": "integer" },
-          "problem": { "type": "string" },
-          "why1": { "type": "string" },
-          "why2": { "type": "string" },
-          "why3": { "type": "string" },
-          "why4": { "type": "string" },
-          "why5": { "type": "string" },
-          "rootCause": { "type": "string" },
-          "fixPlan": { "type": "string" }
+          "iteration": {
+            "type": "integer"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "why1": {
+            "type": "string"
+          },
+          "why2": {
+            "type": "string"
+          },
+          "why3": {
+            "type": "string"
+          },
+          "why4": {
+            "type": "string"
+          },
+          "why5": {
+            "type": "string"
+          },
+          "rootCause": {
+            "type": "string"
+          },
+          "fixPlan": {
+            "type": "string"
+          }
         }
       }
     },
@@ -102,16 +169,273 @@
       "description": "Checkpoints where human input was required",
       "items": {
         "type": "object",
-        "required": ["iteration", "type", "question"],
+        "required": [
+          "iteration",
+          "type",
+          "question"
+        ],
         "properties": {
-          "iteration": { "type": "integer" },
+          "iteration": {
+            "type": "integer"
+          },
           "type": {
             "type": "string",
-            "enum": ["decision", "verification", "blocked"]
+            "enum": [
+              "decision",
+              "verification",
+              "blocked"
+            ]
           },
-          "question": { "type": "string" },
-          "userResponse": { "type": "string" },
-          "timestamp": { "type": "string", "format": "date-time" }
+          "question": {
+            "type": "string"
+          },
+          "userResponse": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "iterationEpisodes": {
+      "type": "array",
+      "description": "Compressed episodic memory per RALPH iteration (mirrors goal.progress.iteration_episodes)",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "episodeId",
+          "iteration",
+          "approach",
+          "outcome",
+          "timestamp"
+        ],
+        "properties": {
+          "episodeId": {
+            "type": "string",
+            "pattern": "^ep-[0-9]{3}$"
+          },
+          "iteration": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "approach": {
+            "type": "string",
+            "minLength": 10
+          },
+          "filesModified": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "partial_success",
+              "failure",
+              "blocked",
+              "regression"
+            ]
+          },
+          "metricDelta": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "after": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          },
+          "functionalResults": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "constraintsDiscovered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextRecommendation": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "architecturalConstraints": {
+      "type": "array",
+      "description": "Formalized constraints with lifecycle (mirrors goal.progress.architectural_constraints)",
+      "items": {
+        "type": "object",
+        "required": [
+          "constraintId",
+          "discoveredAtIteration",
+          "source",
+          "description",
+          "status"
+        ],
+        "properties": {
+          "constraintId": {
+            "type": "string",
+            "pattern": "^ac-[0-9]{3}$"
+          },
+          "discoveredAtIteration": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "functional_failure",
+              "verification_failure",
+              "agent_discovery",
+              "user_input",
+              "five_whys"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "affectedFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mustDo": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mustNot": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded",
+              "invalidated"
+            ]
+          },
+          "supersededBy": {
+            "type": "string",
+            "pattern": "^ac-[0-9]{3}$"
+          }
+        }
+      }
+    },
+    "complexityEvidence": {
+      "type": "array",
+      "description": "Runtime evidence for complexity escalation (mirrors goal.progress.complexity_evidence)",
+      "items": {
+        "type": "object",
+        "required": [
+          "evidenceId",
+          "iteration",
+          "type",
+          "details",
+          "recommendation"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "pattern": "^ce-[0-9]{3}$"
+          },
+          "iteration": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "file_count_exceeded",
+              "detection_command_count",
+              "scope_creep",
+              "regression_pattern",
+              "stuck_pattern"
+            ]
+          },
+          "details": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "threshold": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "actual": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          },
+          "recommendation": {
+            "type": "string",
+            "enum": [
+              "decompose",
+              "escalate_tier",
+              "user_review",
+              "continue"
+            ]
+          },
+          "originalTier": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          },
+          "recommendedTier": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          },
+          "userDecision": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected",
+              "deferred"
+            ]
+          }
         }
       }
     }

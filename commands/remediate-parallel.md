@@ -54,6 +54,37 @@ All names follow ACIS hierarchical namespace:
 
 ## Phase Details
 
+### Phase 0.0: LEGACY MIGRATION (v2.14)
+
+Before parallel safety analysis, migrate any legacy goal files to v2.14 schema:
+
+```bash
+# Migrate each goal to v2.14 schema
+for goal_id in $ARGUMENTS; do
+  goal_file="${goals_dir}/${goal_id}.json"
+  [ -f "$goal_file" ] || continue
+
+  schema_version=$(jq -r '.schema_version // "legacy"' "${goal_file}")
+  if [ "$schema_version" = "legacy" ]; then
+    echo "LEGACY MIGRATION: Upgrading goal ${goal_id} to schema v2.14"
+
+    jq '. + {
+      "schema_version": "2.14"
+    } | .progress += {
+      "iteration_episodes": (.progress.iteration_episodes // []),
+      "complexity_evidence": (.progress.complexity_evidence // []),
+      "checkpoint": (.progress.checkpoint // {"phase": "init", "iteration": 0, "critical_decisions": [], "active_constraints": [], "files_modified_cumulative": [], "metric_snapshot": {}, "next_action": "Begin remediation"}),
+      "architectural_constraints": (.progress.architectural_constraints // []),
+      "five_whys_analyses": (.progress.five_whys_analyses // [])
+    }' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+
+    echo "LEGACY MIGRATION: Complete for ${goal_id}."
+  fi
+done
+```
+
+Migration is idempotent. Skip with `--skip-migration`.
+
 ### Phase 0: PARALLEL SAFETY ANALYSIS
 
 ```
@@ -174,11 +205,75 @@ For each goal (in parallel via separate Task agents):
            git add "${goal_file}"
            git commit --amend --no-edit
 
+
+    5.6. EPISODE RECORDING (v2.14 — T1: Episodic Memory)
+         After step commit, synthesize episode for this step:
+           episode_count=$(jq '.progress.iteration_episodes | length' "${goal_file}")
+           episode_id=$(printf "ep-%03d" $((episode_count + 1)))
+
+           jq --arg eid "$episode_id" --arg iter "$step_number" \
+              --arg approach "Step ${step_id}: ${step_action}" \
+              --arg outcome "$step_result" \
+              --argjson files "$step_files_json" \
+              --arg before "$metric_before" --arg after "$metric_after" \
+             '.progress.iteration_episodes += [{
+               "episode_id": $eid,
+               "iteration": ($iter | tonumber),
+               "approach": $approach,
+               "files_modified": $files,
+               "outcome": $outcome,
+               "metric_delta": {"before": ($before | tonumber), "after": ($after | tonumber)},
+               "functional_results": [],
+               "constraints_discovered": [],
+               "next_recommendation": "",
+               "timestamp": (now | todate)
+             }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+
     6. CHECKPOINT (optional, for recovery)
        git push origin acis/${goal_id}  # If --push-branches
 ```
 
 **Step Size**: Default 3 files max per step (configurable via `--step-size`)
+
+
+#### Cross-Worktree Constraint Sharing (v2.14 — T5: Constraint Propagation)
+
+Constraints discovered in one worktree are propagated to other worktrees in the same batch:
+
+```bash
+# After each goal's step execution, export constraints to shared batch file
+batch_constraints_file="${config.paths.state}/parallel/${BATCH_ID}-constraints.json"
+
+# Export: Append new constraints from this worktree
+new_constraints=$(jq '[.progress.architectural_constraints[] | select(.status == "active")]' "${goal_file}")
+constraint_count=$(echo "$new_constraints" | jq 'length')
+
+if [ "$constraint_count" -gt 0 ]; then
+  # Merge into shared batch constraints file
+  if [ -f "$batch_constraints_file" ]; then
+    existing=$(cat "$batch_constraints_file")
+  else
+    existing='[]'
+  fi
+
+  echo "$existing" | jq --argjson new "$new_constraints" --arg src "$goal_id"     '. + [$new[] | . + {"source_goal": $src}]' > "$batch_constraints_file"
+
+  echo "CONSTRAINT SHARING: Exported ${constraint_count} constraints from ${goal_id} to batch"
+fi
+
+# Import: Before each step, check for constraints from other worktrees
+if [ -f "$batch_constraints_file" ]; then
+  other_constraints=$(jq --arg self "$goal_id"     '[.[] | select(.source_goal != $self)]' "$batch_constraints_file")
+
+  other_count=$(echo "$other_constraints" | jq 'length')
+  if [ "$other_count" -gt 0 ]; then
+    echo "CONSTRAINT SHARING: ${other_count} constraints from other goals in batch"
+    # Agent receives these as additional context for fix planning
+  fi
+fi
+```
+
+This ensures that if Goal A discovers "files in packages/mobile/ must not import from @web directly", Goal B (running in a separate worktree) receives this constraint before its next step.
 
 ### Phase 3: INTEGRATION BRANCH MERGE
 

@@ -675,11 +675,25 @@ For each quantifiable issue, create a goal file:
     "success_condition": "output == 0",
     "parse_output": "count|regex|json"
   },
+  "schema_version": "2.14",
   "progress": {
     "current_count": null,
     "iterations": 0,
     "history": [],
-    "status": "pending"
+    "status": "pending",
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
   },
   "metadata": {
     "created_at": "{timestamp}",
@@ -726,6 +740,79 @@ for goal_file in "$goals_dir"/PR${pr_number}-*.json; do
      "$goal_file" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "$goal_file"
 done
 ```
+
+
+### Step 6.3: Evidence-Based Complexity Estimation (v2.14)
+
+After baseline measurement, compute complexity tier using evidence-based heuristics:
+
+```bash
+# Evidence-based complexity estimation (Bash 3.2 compatible)
+compute_evidence_tier() {
+  local goal_file="$1"
+  local baseline_count="$2"
+
+  local strategy=$(jq -r '.remediation.strategy // "replace"' "$goal_file")
+  local search_paths=$(jq -r '.detection.search_paths | length' "$goal_file")
+  local metric_count=$(jq -r '.detection.verifiable_metrics | length' "$goal_file")
+  local check_count=$(jq -r '.detection.functional_checks | length' "$goal_file" 2>/dev/null || echo "0")
+
+  local tier=1
+  local evidence_type="initial_assessment"
+  local details=""
+
+  # Rule 1: High baseline count → higher tier
+  if [ "$baseline_count" -gt 50 ]; then
+    tier=3
+    details="Baseline count ${baseline_count} > 50"
+  elif [ "$baseline_count" -gt 15 ]; then
+    tier=2
+    details="Baseline count ${baseline_count} > 15"
+  fi
+
+  # Rule 2: Multiple search paths → complexity
+  if [ "$search_paths" -gt 3 ] && [ "$tier" -lt 2 ]; then
+    tier=2
+    details="Search paths: ${search_paths} > 3"
+  fi
+
+  # Rule 3: Multiple metrics → complexity
+  if [ "$metric_count" -gt 2 ] && [ "$tier" -lt 2 ]; then
+    tier=2
+    details="Verifiable metrics: ${metric_count} > 2"
+  fi
+
+  # Rule 4: Strategy-based escalation
+  if [ "$strategy" = "refactor" ] || [ "$strategy" = "custom" ]; then
+    [ "$tier" -lt 2 ] && tier=2
+    details="${details}; Strategy: ${strategy}"
+  fi
+
+  # Record initial complexity evidence
+  jq --arg tier "$tier" --arg details "$details"     '.complexity.tier = ($tier | tonumber) |
+     .progress.complexity_evidence += [{
+       "evidence_id": "ce-001",
+       "iteration": 0,
+       "type": "initial_assessment",
+       "details": ("Evidence-based extraction estimate: " + $details),
+       "values": {"threshold": 0, "actual": '"$baseline_count"'},
+       "recommendation": "continue",
+       "original_tier": ($tier | tonumber),
+       "recommended_tier": ($tier | tonumber)
+     }]' "$goal_file" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "$goal_file"
+
+  echo "$tier"
+}
+
+# Apply evidence-based tier estimation to each goal
+for goal_file in "$goals_dir"/PR${pr_number}-*.json; do
+  baseline=$(jq -r '.baseline.count // 0' "$goal_file")
+  evidence_tier=$(compute_evidence_tier "$goal_file" "$baseline")
+  echo "  Tier: ${evidence_tier} (evidence-based) — $(jq -r '.id' "$goal_file")"
+done
+```
+
+This replaces the static heuristic with runtime evidence that gets recorded in the goal file for later escalation decisions.
 
 ### Step 6.5: Extraction Completeness Check
 
