@@ -52,6 +52,37 @@ Phase 4.5: QUALITY-GATE       Codex reviews cumulative changes (SOLID+DRY)
 10. Record initial state hash: SHA-256 of goal file (for hash chain verification)
 ```
 
+
+#### Phase 0.0: LEGACY MIGRATION (v2.14)
+
+Before any processing, detect and migrate legacy goal files to v2.14 schema:
+
+```bash
+# Check if goal needs migration
+goal_file="$ARGUMENTS"
+schema_version=$(jq -r '.schema_version // "legacy"' "${goal_file}")
+if [ "$schema_version" = "legacy" ]; then
+  echo "LEGACY MIGRATION: Upgrading goal $(jq -r '.id' "${goal_file}") to schema v2.14"
+
+  # Auto-populate required fields with defaults
+  jq '. + {
+    "schema_version": "2.14"
+  } | .progress += {
+    "iteration_episodes": (.progress.iteration_episodes // []),
+    "complexity_evidence": (.progress.complexity_evidence // []),
+    "checkpoint": (.progress.checkpoint // {"phase": "init", "iteration": 0, "critical_decisions": [], "active_constraints": [], "files_modified_cumulative": [], "metric_snapshot": {}, "next_action": "Begin remediation"}),
+    "architectural_constraints": (.progress.architectural_constraints // []),
+    "five_whys_analyses": (.progress.five_whys_analyses // [])
+  }' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+
+  echo "LEGACY MIGRATION: Complete. Goal now conforms to v2.14 schema."
+fi
+```
+
+**Migration is idempotent** — if fields already exist, `// []` preserves them.
+
+Skip with `--skip-migration` if goal is known to be v2.14.
+
 #### Phase 0.1: INTENT CONTRACT CAPTURE
 
 Before any analysis begins, capture the user's intent:
@@ -136,6 +167,68 @@ Validate referential integrity across goal fields:
 4. If `--manifest` flag provided, validate no circular dependencies among decisions:
    - Build dependency graph from decision manifest
    - Run topological sort; if cycle detected → ABORT: "Circular dependency in decisions: {cycle}"
+
+
+#### Phase 0.5: COMPLEXITY GUARD (v2.14 — Decomposition Guards)
+
+After cross-field validation, evaluate goal complexity to detect over-scoped goals:
+
+| Check | Threshold | Evidence Type | Action |
+|-------|-----------|---------------|--------|
+| Affected files > 5 | 5 files | `file_count_exceeded` | Suggest decomposition |
+| Detection commands > 3 | 3 commands | `detection_command_count` | Warn: goal too broad |
+| Tier 1 + files > 3 | Tier 1 & 3+ files | `scope_creep` | Recommend Tier 2 |
+| Tier 2 + files > 8 | Tier 2 & 8+ files | `scope_creep` | Recommend Tier 3 |
+
+```bash
+# Complexity guard evaluation
+affected_file_count=$(eval "${detection_cmd}" 2>/dev/null | grep -oE '[^ ]+\.[a-z]+' | sort -u | wc -l | tr -d ' ')
+detection_cmd_count=$(jq '[.detection.verifiable_metrics[].command] | length' "${goal_file}")
+current_tier=$(jq -r '.complexity.tier // 1' "${goal_file}")
+
+evidence_type=""
+recommendation=""
+
+if [ "$affected_file_count" -gt 5 ]; then
+  evidence_type="file_count_exceeded"
+  recommendation="decompose"
+elif [ "$detection_cmd_count" -gt 3 ]; then
+  evidence_type="detection_command_count"
+  recommendation="decompose"
+elif [ "$current_tier" -eq 1 ] && [ "$affected_file_count" -gt 3 ]; then
+  evidence_type="scope_creep"
+  recommendation="escalate_tier"
+elif [ "$current_tier" -eq 2 ] && [ "$affected_file_count" -gt 8 ]; then
+  evidence_type="scope_creep"
+  recommendation="escalate_tier"
+fi
+
+if [ -n "$evidence_type" ]; then
+  # Record complexity evidence
+  jq --arg etype "$evidence_type" --arg rec "$recommendation" \
+     --arg tier "$current_tier" --arg files "$affected_file_count" \
+    '.progress.complexity_evidence += [{
+      "evidence_id": ("ce-" + (.progress.complexity_evidence | length + 1 | tostring | if length < 3 then "0" * (3 - length) + . else . end)),
+      "iteration": 0,
+      "type": $etype,
+      "details": "Pre-remediation complexity guard detected \($etype)",
+      "values": {"threshold": (if $etype == "file_count_exceeded" then 5 elif $etype == "detection_command_count" then 3 else 3 end), "actual": ($files | tonumber)},
+      "recommendation": $rec,
+      "original_tier": ($tier | tonumber),
+      "recommended_tier": (if $rec == "escalate_tier" then ([$tier | tonumber + 1, 3] | min) else ($tier | tonumber) end)
+    }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+
+  echo ""
+  echo "⚠️  COMPLEXITY GUARD: ${evidence_type} detected"
+  echo "    Affected files: ${affected_file_count}"
+  echo "    Current tier: ${current_tier}"
+  echo "    Recommendation: ${recommendation}"
+  echo ""
+  echo "    Options: [D] Decompose  [E] Escalate tier  [C] Continue (override)"
+fi
+```
+
+Skip with `--skip-complexity-guard`.
 
 #### Phase 0.6: HASH CHAIN INITIALIZATION
 
@@ -255,6 +348,231 @@ After each FIX, before CHECKPOINT, run invariant checks from `${CLAUDE_PLUGIN_RO
       - `warn_and_retry`: Log violation, WARN user, allow one retry of the FIX step
 2. All invariants must pass before CHECKPOINT proceeds
 3. Invariant results recorded in progress file for audit trail
+
+
+#### Expanded RALPH-LOOP (v2.14 — Harness Engineering)
+
+The RALPH-LOOP iteration now includes 6 additional steps for learning persistence:
+
+```
+MEASURE → STUCK-CHECK → VERIFY → FUNCTIONAL
+  │ (if not achieved or false positive)
+  ▼
+CONSTRAINT-SYNTHESIS (T5)   → Extract constraint from functional failure
+  │
+  ▼
+5-WHYS → 5-WHYS-RECORDING (T6) → Persist structured result
+  │
+  ▼
+AGENT-BRIEF (T2)            → Build tactical brief for fix agent
+  │
+  ▼
+FIX → INVARIANT → CHECKPOINT
+  │
+  ▼
+CHECKPOINT-WRITE (T4)       → Persist recovery state
+  │
+  ▼
+EPISODE-SYNTHESIS (T1)      → Compress iteration into episode
+  │
+  ▼
+COMPLEXITY-ESCALATION (T3)  → Check if tier should increase
+  │
+  ▼
+REPEAT
+```
+
+##### CONSTRAINT-SYNTHESIS (T5: Constraint Propagation)
+
+After FUNCTIONAL check fails (false positive detected), extract the constraint:
+
+```bash
+# Extract constraint from functional failure
+if [ "$false_positive" = "true" ]; then
+  constraint_count=$(jq '.progress.architectural_constraints | length' "${goal_file}")
+  constraint_id=$(printf "ac-%03d" $((constraint_count + 1)))
+
+  jq --arg cid "$constraint_id" --arg iter "$iteration" \
+     --arg desc "Functional check failed: ${failed_check_id}" \
+     --argjson files "$affected_files_json" \
+    '.progress.architectural_constraints += [{
+      "constraint_id": $cid,
+      "discovered_at_iteration": ($iter | tonumber),
+      "source": "functional_failure",
+      "description": $desc,
+      "affected_files": $files,
+      "must_do": [],
+      "must_not": [],
+      "confidence": 0.8,
+      "status": "active"
+    }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+fi
+```
+
+##### 5-WHYS-RECORDING (T6: Structured 5-Whys Storage)
+
+After 5 Whys analysis, persist the structured result:
+
+```bash
+# Persist 5-Whys analysis
+analysis_count=$(jq '.progress.five_whys_analyses | length' "${goal_file}")
+analysis_id=$(printf "5w-%03d" $((analysis_count + 1)))
+
+jq --arg aid "$analysis_id" --arg iter "$iteration" \
+   --arg trigger "$stuck_trigger" --arg problem "$problem" \
+   --arg w1 "$why1" --arg w2 "$why2" --arg w3 "$why3" \
+   --arg w4 "$why4" --arg w5 "$why5" \
+   --arg root "$root_cause" --arg plan "$fix_plan" \
+  '.progress.five_whys_analyses += [{
+    "analysis_id": $aid,
+    "iteration": ($iter | tonumber),
+    "trigger": $trigger,
+    "problem": $problem,
+    "why1": $w1, "why2": $w2, "why3": $w3, "why4": $w4, "why5": $w5,
+    "root_cause": $root,
+    "fix_plan": $plan,
+    "perspectives": [],
+    "convergence": "moderate",
+    "yielded_constraints": []
+  }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+##### AGENT-BRIEF (T2: Kernel/Worker Split)
+
+Build a focused tactical brief for the fix agent instead of passing full context:
+
+```bash
+# Build tactical brief from episodes + constraints
+tactical_brief=$(jq '{
+  goal_id: .id,
+  target: .target,
+  current_iteration: .progress.iterations,
+  last_episode: (.progress.iteration_episodes | last),
+  active_constraints: [.progress.architectural_constraints[] | select(.status == "active")],
+  recent_5whys: (.progress.five_whys_analyses | last),
+  focus_files: (.progress.checkpoint.files_modified_cumulative // []),
+  next_action: (.progress.checkpoint.next_action // "Apply fix based on discovery recommendations")
+}' "${goal_file}")
+```
+
+The orchestrator passes this brief (not the full goal) to the fix agent. Full goal is available as fallback.
+
+##### CHECKPOINT-WRITE (T4: Compaction-Resilient Checkpoints)
+
+After each FIX + INVARIANT, persist recovery state:
+
+```bash
+# Write checkpoint (single object, latest state)
+jq --arg phase "ralph" --arg iter "$iteration" \
+   --arg ep_id "$last_episode_id" --arg next "$next_action" \
+   --argjson decisions "$critical_decisions_json" \
+   --argjson constraints "$active_constraint_ids_json" \
+   --argjson files "$cumulative_files_json" \
+   --argjson metrics "$metric_snapshot_json" \
+  '.progress.checkpoint = {
+    "phase": $phase,
+    "iteration": ($iter | tonumber),
+    "last_episode_id": $ep_id,
+    "critical_decisions": $decisions,
+    "active_constraints": $constraints,
+    "files_modified_cumulative": $files,
+    "metric_snapshot": $metrics,
+    "next_action": $next
+  }' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+##### EPISODE-SYNTHESIS (T1: Episodic Memory)
+
+After fix+verify, compress the iteration into an episode record:
+
+```bash
+# Synthesize episode (max 10 episodes, older ones compressed to 1-line summaries)
+episode_count=$(jq '.progress.iteration_episodes | length' "${goal_file}")
+episode_id=$(printf "ep-%03d" $((episode_count + 1)))
+
+# If at cap (10), compress oldest episode to summary
+if [ "$episode_count" -ge 10 ]; then
+  jq '.progress.iteration_episodes = [
+    (.progress.iteration_episodes[0] | {episode_id, iteration, approach: (.approach[:50] + "..."), outcome, timestamp}),
+    .progress.iteration_episodes[1:][]
+  ]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+fi
+
+jq --arg eid "$episode_id" --arg iter "$iteration" \
+   --arg approach "$approach_taken" --arg outcome "$fix_outcome" \
+   --argjson files "$modified_files_json" \
+   --arg before "$metric_before" --arg after "$metric_after" \
+   --arg next_rec "$next_recommendation" \
+  '.progress.iteration_episodes += [{
+    "episode_id": $eid,
+    "iteration": ($iter | tonumber),
+    "approach": $approach,
+    "files_modified": $files,
+    "outcome": $outcome,
+    "metric_delta": {"before": ($before | tonumber), "after": ($after | tonumber)},
+    "functional_results": [],
+    "constraints_discovered": [],
+    "next_recommendation": $next_rec,
+    "timestamp": (now | todate)
+  }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+```
+
+##### COMPLEXITY-ESCALATION (T3: Decomposition Guards)
+
+After each iteration, check if complexity tier should increase:
+
+```bash
+# Check escalation rules
+iterations_done=$(jq '.progress.iterations' "${goal_file}")
+current_tier=$(jq '.complexity.tier // 1' "${goal_file}")
+episode_failures=$(jq '[.progress.iteration_episodes[] | select(.outcome == "failure" or .outcome == "regression")] | length' "${goal_file}")
+files_touched=$(jq '.progress.checkpoint.files_modified_cumulative | length' "${goal_file}")
+
+should_escalate="false"
+evidence_type=""
+
+# Rule: 3+ failures at current tier → escalate
+if [ "$episode_failures" -ge 3 ] && [ "$current_tier" -lt 3 ]; then
+  should_escalate="true"
+  evidence_type="stuck_pattern"
+fi
+
+# Rule: Files growing beyond tier scope
+if [ "$current_tier" -eq 1 ] && [ "$files_touched" -gt 3 ]; then
+  should_escalate="true"
+  evidence_type="scope_creep"
+elif [ "$current_tier" -eq 2 ] && [ "$files_touched" -gt 8 ]; then
+  should_escalate="true"
+  evidence_type="scope_creep"
+fi
+
+if [ "$should_escalate" = "true" ]; then
+  recommended_tier=$((current_tier + 1))
+  [ "$recommended_tier" -gt 3 ] && recommended_tier=3
+
+  # Record evidence
+  ce_count=$(jq '.progress.complexity_evidence | length' "${goal_file}")
+  ce_id=$(printf "ce-%03d" $((ce_count + 1)))
+
+  jq --arg ceid "$ce_id" --arg iter "$iterations_done" \
+     --arg etype "$evidence_type" --arg ctier "$current_tier" \
+     --arg rtier "$recommended_tier" \
+    '.progress.complexity_evidence += [{
+      "evidence_id": $ceid,
+      "iteration": ($iter | tonumber),
+      "type": $etype,
+      "details": "Runtime escalation: \($etype) at iteration \($iter)",
+      "recommendation": "escalate_tier",
+      "original_tier": ($ctier | tonumber),
+      "recommended_tier": ($rtier | tonumber)
+    }]' "${goal_file}" > "${goal_file}.tmp" && mv "${goal_file}.tmp" "${goal_file}"
+
+  echo "⚠️  COMPLEXITY ESCALATION: Recommending Tier ${current_tier} → Tier ${recommended_tier} (${evidence_type})"
+  echo "    Options: [E] Escalate  [C] Continue at current tier"
+fi
+```
+
+Skip escalation checks with `--skip-complexity-escalation` or cap with `--max-tier N`.
 
 ### Phase 4: CONSENSUS VERIFICATION
 
@@ -379,6 +697,12 @@ When stuck for multiple iterations, optionally consult Codex for problem-solving
 | `--no-fast-path` | Disable Tier 1 fast-path, force full pipeline |
 | `--skip-intent` | Skip intent contract capture (Phase 0.1) |
 | `--skip-dry-run` | Skip detection command dry-run validation (Phase 0.3) |
+| `--skip-complexity-guard` | Skip Phase 0.5 complexity guard |
+| `--skip-complexity-escalation` | Skip runtime complexity escalation in RALPH-LOOP |
+| `--max-tier N` | Cap maximum tier for escalation (1, 2, or 3) |
+| `--skip-episodes` | Skip episode synthesis (T1) in RALPH-LOOP |
+| `--skip-constraints` | Skip constraint propagation (T5) in RALPH-LOOP |
+| `--skip-migration` | Skip Phase 0.0 legacy migration (trust goal is v2.14) |
 | `--force-state-transition` | Bypass state machine enforcement (use with caution) |
 | `--skip-invariants` | Skip safety invariant checks between FIX and CHECKPOINT |
 

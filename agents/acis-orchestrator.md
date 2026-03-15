@@ -133,6 +133,150 @@ Discovery: @.acis/discovery/{goal-id}.md
     - Check audit threshold
 ```
 
+
+### Remediation Orchestration (v2.14 — Harness Engineering Extensions)
+
+The remediation loop now includes 4 additional sub-steps for learning persistence:
+
+#### 5.1 BUILD TACTICAL BRIEF (T2: Kernel/Worker Split)
+
+Before spawning the fix agent, build a focused tactical brief:
+
+```
+5.1. BUILD TACTICAL BRIEF (before spawning fix agent):
+   Read goal file:
+     - Extract last 3 episodes from progress.iteration_episodes[]
+     - Extract ALL active constraints from progress.architectural_constraints[] (status == "active")
+     - Extract latest 5-Whys analysis from progress.five_whys_analyses[] (last entry)
+     - Read checkpoint.next_action for continuation guidance
+
+   Compose tactical brief:
+   {
+     "goal_id": "{id}",
+     "target": { from goal },
+     "current_iteration": N,
+     "recent_episodes": [ last 3 episodes ],
+     "active_constraints": [ all active constraints ],
+     "recent_5whys": { latest analysis or null },
+     "focus_files": [ from checkpoint.files_modified_cumulative ],
+     "next_action": "{ checkpoint.next_action }"
+   }
+
+   Spawn Fix Agent with tactical brief as PRIMARY context:
+   Task(
+     prompt="Execute fix iteration {N}...
+       TACTICAL BRIEF: {tactical_brief_json}
+       Full Goal (fallback): @{goal_file}
+       ...",
+     subagent_type="acis-fix-agent"
+   )
+```
+
+#### 6.5 SYNTHESIZE EPISODE (T1: Episodic Memory)
+
+After fix agent returns + verify agent confirms result:
+
+```
+6.5. SYNTHESIZE EPISODE (after fix + verify):
+   episode_id = "ep-{NNN}" (sequential from progress.iteration_episodes length)
+
+   Compress iteration into episode record:
+   {
+     "episode_id": "{ep-NNN}",
+     "iteration": N,
+     "approach": "{ fix agent's action description (min 10 chars) }",
+     "files_modified": [ from fix agent result ],
+     "outcome": "{ success | partial_success | failure | blocked | regression }",
+     "metric_delta": { "before": M_before, "after": M_after },
+     "functional_results": [ from verify agent's functional check results ],
+     "constraints_discovered": [ any new constraints from this iteration ],
+     "next_recommendation": "{ what the next iteration should try }",
+     "timestamp": "{ ISO timestamp }"
+   }
+
+   Append to progress.iteration_episodes[] in goal file.
+
+   If episodes count >= 10:
+     Compress oldest episode to summary (truncate approach to 50 chars).
+
+   Update progress file (.acis/progress/{goal-id}.json) iterationEpisodes.
+```
+
+#### 8.5 EXTRACT CONSTRAINTS (T5: Constraint Propagation)
+
+After functional check failures or verification anomalies:
+
+```
+8.5. EXTRACT CONSTRAINTS (after functional failures):
+   If verify agent reports:
+     - constraint_violations_detected (non-empty)
+     - functional_check failures
+     - files_with_remaining_issues
+
+   For each violation:
+     constraint_id = "ac-{NNN}" (sequential)
+
+     Create constraint:
+     {
+       "constraint_id": "{ac-NNN}",
+       "discovered_at_iteration": N,
+       "source": "functional_failure" | "verification_failure",
+       "description": "{ what was violated }",
+       "affected_files": [ files involved ],
+       "must_do": [ positive requirements ],
+       "must_not": [ negative requirements ],
+       "confidence": 0.8,
+       "status": "active"
+     }
+
+     Append to progress.architectural_constraints[] in goal file.
+     Update progress file architecturalConstraints.
+
+   Check for superseded constraints:
+     If new constraint covers same files as existing active constraint:
+       Set old constraint status = "superseded", superseded_by = new constraint_id
+```
+
+#### 9.5 COMPLEXITY ESCALATION (T3: Decomposition Guards)
+
+After each iteration, evaluate if complexity tier should increase:
+
+```
+9.5. COMPLEXITY ESCALATION (after checkpoint):
+   Evaluate escalation rules:
+
+   Rule 1 — Stuck Pattern:
+     If 3+ episodes have outcome == "failure" or "regression" AND current_tier < 3:
+       Recommend escalation
+
+   Rule 2 — Scope Creep:
+     If Tier 1 AND checkpoint.files_modified_cumulative > 3 files:
+       Recommend Tier 2
+     If Tier 2 AND checkpoint.files_modified_cumulative > 8 files:
+       Recommend Tier 3
+
+   Rule 3 — Regression Pattern:
+     If last 2 episodes show metric regression (after > before):
+       Recommend escalation
+
+   If escalation recommended:
+     Record complexity_evidence entry:
+     {
+       "evidence_id": "ce-{NNN}",
+       "iteration": N,
+       "type": "stuck_pattern" | "scope_creep" | "regression_pattern",
+       "details": "{ description }",
+       "recommendation": "escalate_tier",
+       "original_tier": T,
+       "recommended_tier": T+1
+     }
+
+     Present to user: "Complexity escalation recommended: Tier {T} → Tier {T+1}. [E]scalate / [C]ontinue?"
+     Record user_decision in complexity_evidence entry.
+
+   Skip with --skip-complexity-escalation or cap with --max-tier N.
+```
+
 ### Audit Orchestration
 
 ```

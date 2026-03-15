@@ -52,9 +52,35 @@ Capture output.
   "targetValue": "{target from goal}",
   "comparison": "{comparison type}",
   "passed": true | false,
-  "timestamp": "{ISO timestamp}"
+  "timestamp": "{ISO timestamp}",
+  "episode_data": {
+    "metric_delta": {
+      "before": "{previous measurement or null}",
+      "after": "{current measurement}"
+    },
+    "functional_check_results": [
+      {
+        "check_id": "{check_id}",
+        "passed": true,
+        "exit_code": 0,
+        "severity": "blocking"
+      }
+    ],
+    "constraint_violations_detected": [
+      "{description of any constraint violations observed during verification}"
+    ],
+    "files_with_remaining_issues": [
+      "src/path/to/file.ts:line_number"
+    ]
+  }
 }
 ```
+
+The `episode_data` field (v2.14) provides data for the orchestrator's episode synthesis and constraint extraction steps. It is populated by:
+- `metric_delta`: Comparing current measurement against the previous measurement from the progress file
+- `functional_check_results`: Running each `detection.functional_checks[]` entry (if present)
+- `constraint_violations_detected`: Any patterns that suggest architectural constraints are being violated
+- `files_with_remaining_issues`: Specific file locations where issues persist (from detection command output parsing)
 
 ## Context Budget
 
