@@ -1,0 +1,86 @@
+{
+  "id": "PR11-CRIT-002-episode-compression-bug",
+  "source": {
+    "origin": "pr-review",
+    "pr_number": 11,
+    "lens": "architecture",
+    "severity": "critical",
+    "original_comment": "The episode compression logic attempts to compress the oldest episode but doesn't reduce the array's size. The subsequent jq command adds a new episode, causing the array to exceed maxItems: 10. Additionally, the compressed episode object is missing required fields (files_modified, metric_delta)."
+  },
+  "detection": {
+    "primary_command": "grep -A5 'compress oldest episode' commands/remediate.md | grep -c 'iteration_episodes\\[0\\]' | tr -d ' '",
+    "pattern": "episode compression that retains all elements instead of removing oldest",
+    "search_paths": [
+      "commands/"
+    ],
+    "verifiable_metrics": [
+      {
+        "metric_id": "broken_compression_pattern",
+        "name": "Episode compression that does not reduce array size",
+        "command": "grep -c 'iteration_episodes\\[0\\].*episode_id.*iteration.*approach' commands/remediate.md | tr -d ' '",
+        "expected_value": 0,
+        "tolerance": 0,
+        "parse_type": "integer",
+        "comparison": "eq",
+        "verification_notes": "The old compression pattern keeps all episodes and creates an invalid compressed object"
+      }
+    ]
+  },
+  "target": {
+    "type": "zero",
+    "primary_metric": "broken_compression_pattern"
+  },
+  "verification": {
+    "command": "grep -c 'iteration_episodes\\[1:\\]' commands/remediate.md | tr -d ' '",
+    "success_condition": "output >= 1",
+    "parse_output": "count"
+  },
+  "multi_perspective": {
+    "discovery_agents": [],
+    "verification_agents": [],
+    "consensus_threshold": 0.75
+  },
+  "behavioral": {
+    "enabled": false
+  },
+  "consensus": {
+    "enabled": false
+  },
+  "complexity": {
+    "tier": 1,
+    "reasoning": "Simple fix: replace compression logic with array slice [1:]"
+  },
+  "remediation": {
+    "strategy": "replace",
+    "replacement": "Replace compression with: jq '.progress.iteration_episodes = .progress.iteration_episodes[1:]'",
+    "guidance": "Remove the broken compression that creates an invalid summary object. Instead, simply drop the oldest episode with array slicing."
+  },
+  "schema_version": "2.14",
+  "progress": {
+    "status": "pending",
+    "iterations": 0,
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
+  },
+  "metadata": {
+    "created_at": "2026-03-15T03:10:15Z",
+    "updated_at": "2026-03-15T03:10:15Z",
+    "tags": [
+      "pr-11",
+      "architecture",
+      "critical",
+      "schema-violation"
+    ]
+  }
+}

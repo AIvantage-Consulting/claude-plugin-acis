@@ -1,0 +1,85 @@
+{
+  "id": "PR11-HIGH-002-schema-naming-inconsistency",
+  "source": {
+    "origin": "pr-review",
+    "pr_number": 11,
+    "lens": "maintainability",
+    "severity": "high",
+    "original_comment": "Naming inconsistency between acis-progress.schema.json (camelCase: iterationEpisodes, architecturalConstraints, complexityEvidence) and acis-goal.schema.json (snake_case: iteration_episodes, architectural_constraints, complexity_evidence). This extends to nested properties. Will cause confusion and bugs in tooling."
+  },
+  "detection": {
+    "primary_command": "grep -c 'iterationEpisodes\\|architecturalConstraints\\|complexityEvidence' schemas/acis-progress.schema.json | tr -d ' '",
+    "pattern": "camelCase property names in progress schema that should match goal schema convention",
+    "search_paths": [
+      "schemas/"
+    ],
+    "verifiable_metrics": [
+      {
+        "metric_id": "naming_inconsistency_count",
+        "name": "camelCase vs snake_case naming mismatches between schemas",
+        "command": "grep -c 'iterationEpisodes\\|architecturalConstraints\\|complexityEvidence\\|episodeId\\|discoveredAtIteration\\|constraintId\\|evidenceId\\|affectedFiles\\|mustDo\\|mustNot\\|supersededBy\\|originalTier\\|recommendedTier\\|userDecision\\|metricDelta\\|functionalResults\\|constraintsDiscovered\\|nextRecommendation\\|filesModified' schemas/acis-progress.schema.json | tr -d ' '",
+        "expected_value": 0,
+        "tolerance": 0,
+        "parse_type": "integer",
+        "comparison": "eq",
+        "verification_notes": "After fix, all property names in progress schema should use same convention as goal schema"
+      }
+    ]
+  },
+  "target": {
+    "type": "zero",
+    "primary_metric": "naming_inconsistency_count"
+  },
+  "verification": {
+    "command": "grep -c 'iterationEpisodes\\|architecturalConstraints\\|complexityEvidence' schemas/acis-progress.schema.json | tr -d ' '",
+    "success_condition": "output == 0",
+    "parse_output": "count"
+  },
+  "multi_perspective": {
+    "discovery_agents": [],
+    "verification_agents": [],
+    "consensus_threshold": 0.75
+  },
+  "behavioral": {
+    "enabled": false
+  },
+  "consensus": {
+    "enabled": false
+  },
+  "complexity": {
+    "tier": 2,
+    "reasoning": "Intentional design: progress schema uses camelCase to match existing convention (goalId, agentType etc). Both schemas are valid but serve different contexts."
+  },
+  "remediation": {
+    "strategy": "refactor",
+    "guidance": "DECISION REQUIRED: The progress schema already uses camelCase (goalId, agentType, filesModified). The new properties follow this convention. The goal schema uses snake_case. This is an intentional split. Options: (A) Accept dual convention (document it), (B) Migrate progress schema to snake_case, (C) Migrate goal schema to camelCase."
+  },
+  "schema_version": "2.14",
+  "progress": {
+    "status": "pending",
+    "iterations": 0,
+    "iteration_episodes": [],
+    "complexity_evidence": [],
+    "checkpoint": {
+      "phase": "init",
+      "iteration": 0,
+      "critical_decisions": [],
+      "active_constraints": [],
+      "files_modified_cumulative": [],
+      "metric_snapshot": {},
+      "next_action": "Begin remediation"
+    },
+    "architectural_constraints": [],
+    "five_whys_analyses": []
+  },
+  "metadata": {
+    "created_at": "2026-03-15T03:10:15Z",
+    "updated_at": "2026-03-15T03:10:15Z",
+    "tags": [
+      "pr-11",
+      "maintainability",
+      "high",
+      "naming-convention"
+    ]
+  }
+}

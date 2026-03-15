@@ -299,7 +299,7 @@ mcp__codex__codex(prompt="CEO-Beta...", sandbox="read-only")
 | Command | Description |
 |---------|-------------|
 | `init` | Bootstrap ACIS for a new project (interview or doc extraction) |
-| `extract <PR>` | Extract goals from PR review comments |
+| `extract <PR>` | Extract goals from PR review comments (with Comment Challenge: `--skip-challenge`, `--deep-challenge`) |
 | `discovery "<topic>"` | Proactive investigation: surface decisions, generate specs, find issues |
 | `resolve <manifest>` | Resolve pending decisions (auto-approve if CEOs converge, prompt if diverge) |
 | `remediate <goal-file>` | Full pipeline: Discovery → Behavioral TDD → Ralph-Loop → Consensus |

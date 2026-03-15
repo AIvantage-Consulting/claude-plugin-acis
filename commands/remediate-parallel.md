@@ -54,6 +54,39 @@ All names follow ACIS hierarchical namespace:
 
 ## Phase Details
 
+
+### Phase 0 PRE-CHECK: REJECTED GOAL FILTER (v2.15)
+
+Before parallel safety analysis, filter out rejected goals:
+
+```bash
+# Filter out rejected goals from batch
+active_goals=""
+for goal_id in $ARGUMENTS; do
+  # Resolve goal file path (handles both full IDs and abbreviated --wo/--goals format)
+  goal_file="${goals_dir}/${goal_id}.json"
+  if [ ! -f "$goal_file" ]; then
+    # Try finding by pattern match (abbreviated ID)
+    goal_file=$(find "$goals_dir" -name "*${goal_id}*.json" -type f 2>/dev/null | head -1)
+  fi
+  [ -z "$goal_file" ] || [ ! -f "$goal_file" ] && continue
+  goal_status=$(jq -r '.progress.status // "pending"' "$goal_file" 2>/dev/null)
+  if [ "$goal_status" = "rejected" ]; then
+    echo "SKIPPING rejected goal: ${goal_id} (challenge phase)"
+    echo "  Technical: $(jq -r '.challenge.technical_reasoning // "N/A"' "$goal_file")"
+    echo "  Strategic: $(jq -r '.challenge.strategic_reasoning // "N/A"' "$goal_file")"
+    continue
+  fi
+  active_goals="${active_goals} ${goal_id}"
+done
+ARGUMENTS="$active_goals"
+
+if [ -z "$(echo "$ARGUMENTS" | tr -d ' ')" ]; then
+  echo "All goals in batch were rejected. Nothing to remediate."
+  exit 0
+fi
+```
+
 ### Phase 0.0: LEGACY MIGRATION (v2.14)
 
 Before parallel safety analysis, migrate any legacy goal files to v2.14 schema:
